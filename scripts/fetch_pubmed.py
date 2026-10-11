@@ -41,17 +41,78 @@ EMAIL = os.environ.get("NCBI_EMAIL", "").strip()
 # hyphen, so any paper containing "car" and "t" matches — car-seat injury
 # studies, fMRI papers and the like. Anchor on the MeSH descriptor plus exact
 # Title/Abstract phrases instead.
+# Bare "CAR-T"/"CAR-NK" matter: many abstracts write "CAR-T therapy" with no
+# "cell", and requiring "cell" drops ~1,200 real papers.
+# "CAR-M" is deliberately absent: it also denotes cancer-cell-membrane coatings
+# in nanomedicine, so only unambiguous macrophage spellings are listed.
 QUERY = (
     '("Receptors, Chimeric Antigen"[Mesh] '
     'OR "chimeric antigen receptor"[tiab] '
     'OR "chimeric antigen receptors"[tiab] '
     'OR "chimeric autoantibody receptor"[tiab] '
     'OR "chimeric autoantibody receptors"[tiab] '
-    'OR "CAR-T cell"[tiab] OR "CAR-T cells"[tiab] '
-    'OR "CAR T cell"[tiab] OR "CAR T cells"[tiab] '
-    'OR "CAR-NK cell"[tiab] OR "CAR-NK cells"[tiab] '
-    'OR "CAR NK cell"[tiab] OR "CAR NK cells"[tiab] '
-    'OR "CAAR-T"[tiab] OR "CAAR T cell"[tiab]) '
+    'OR "CAR-T"[tiab] OR "CAR T cell"[tiab] OR "CAR T cells"[tiab] '
+    'OR "CAR-NK"[tiab] OR "CAR NK cell"[tiab] OR "CAR NK cells"[tiab] '
+    'OR "CAAR-T"[tiab] OR "CAAR T cell"[tiab] OR "CAAR T cells"[tiab] '
+    'OR "CAR-macrophage"[tiab] OR "CAR-macrophages"[tiab] OR "CAR-Ms"[tiab] '
+    'OR "CAR-Treg"[tiab] OR "CAR-Tregs"[tiab] '
+    'OR "CAR-NKT"[tiab] OR "CAR-iNKT"[tiab] '
+    'OR "CAR-neutrophil"[tiab] OR "CAR-neutrophils"[tiab] '
+    'OR "CAR-HSC"[tiab] OR "CAR gamma delta"[tiab] '
+    # Pre-2010 terminology. "Chimeric antigen receptor" only became standard
+    # around 2009-2010; the founding literature says T-body, chimeric
+    # immunoreceptor or chimeric T cell receptor instead. Bare "chimeric
+    # receptor" is deliberately excluded — it pulls in >1,200 unrelated
+    # chimeric GPCR and cytokine-receptor papers.
+    'OR "T-body"[tiab] OR "T-bodies"[tiab] '
+    'OR "chimeric immunoreceptor"[tiab] OR "chimeric immunoreceptors"[tiab] '
+    'OR "chimeric immune receptor"[tiab] OR "chimeric immune receptors"[tiab] '
+    'OR "chimeric T cell receptor"[tiab] OR "chimeric T cell receptors"[tiab] '
+    # Clinical papers often name only the product.
+    'OR "tisagenlecleucel"[tiab] OR "axicabtagene"[tiab] '
+    'OR "brexucabtagene"[tiab] OR "lisocabtagene"[tiab] '
+    'OR "idecabtagene"[tiab] OR "ciltacabtagene"[tiab] '
+    'OR "obecabtagene"[tiab] OR "equecabtagene"[tiab] '
+    'OR "relmacabtagene"[tiab] OR "zevorcabtagene"[tiab] '
+    'OR "anitocabtagene"[tiab] '
+    'OR "axi-cel"[tiab] OR "tisa-cel"[tiab] OR "liso-cel"[tiab] '
+    'OR "ide-cel"[tiab] OR "cilta-cel"[tiab] OR "brexu-cel"[tiab] '
+    'OR "obe-cel"[tiab] '
+    'OR "Kymriah"[tiab] OR "Yescarta"[tiab] OR "Tecartus"[tiab] '
+    'OR "Breyanzi"[tiab] OR "Abecma"[tiab] OR "Carvykti"[tiab] '
+    'OR "Aucatzyl"[tiab] '
+    # Platform variants and target-prefixed spellings.
+    'OR "UniCAR"[tiab] OR "switchable CAR"[tiab] OR "adapter CAR"[tiab] '
+    'OR "universal chimeric antigen receptor"[tiab] '
+    'OR "CAR construct"[tiab] OR "CAR constructs"[tiab] '
+    'OR "CAR therapy"[tiab] OR "CAR therapies"[tiab] '
+    'OR "CAR cell therapy"[tiab] '
+    'OR "CD19 CAR"[tiab] OR "BCMA CAR"[tiab] '
+    # --- Non-CAR synthetic receptor platforms -------------------------------
+    # Same engineering premise (install a synthetic receptor so a cell becomes
+    # the drug), different recognition logic. Kept in scope; tagged separately
+    # so the CAR view stays clean.
+    #
+    # Tolerance platforms that present an autoantigen instead of an scFv:
+    'OR "B-cell antibody receptor"[tiab] OR "BAR Treg"[tiab] '
+    'OR "BAR Tregs"[tiab] OR "BAR T cells"[tiab] '
+    # AIR: inflammation biosensor, not an antigen binder. PubMed has no phrase
+    # index entry for "artificial immune receptor", so proximity is required —
+    # a plain quoted search returns zero.
+    'OR "artificial immune receptor"[tiab:~1] '
+    'OR "AIR-Treg"[tiab] OR "AIR Treg"[tiab] OR "AIR Tregs"[tiab] '
+    # Receptor architectures outside the CAR backbone:
+    'OR "synNotch"[tiab] OR "synthetic Notch"[tiab] OR "SNIPR"[tiab] '
+    'OR "TRuC"[tiab] OR "TRuCs"[tiab] '
+    'OR "T cell receptor fusion construct"[tiab] '
+    'OR "T cell receptor fusion protein"[tiab] '
+    'OR "chimeric engulfment receptor"[tiab] '
+    'OR "antibody-coupled T cell receptor"[tiab] OR "ACTR T cells"[tiab] '
+    'OR "HIT receptor"[tiab] OR "synthetic immune receptor"[tiab:~1] '
+    # CAR-adjacent control modules:
+    'OR "inhibitory chimeric antigen receptor"[tiab] OR "iCAR"[tiab] '
+    'OR "chimeric switch receptor"[tiab] '
+    'OR "chimeric costimulatory receptor"[tiab]) '
     'NOT (Editorial[pt] OR Comment[pt] OR Letter[pt] OR "Case Reports"[pt] '
     'OR Retracted Publication[pt])'
 )
@@ -59,7 +120,23 @@ QUERY = (
 CATEGORY_RULES = [
     ("CAAR-T",     [r"chimeric autoantibody receptor", r"\bCAAR[-\s]?T\b", r"\bCAAR\b"]),
     ("CAR-NK",     [r"CAR[-\s]?NK", r"chimeric antigen receptor[^.]{0,40}natural killer"]),
-    ("CAR-T",      [r"CAR[-\s]?T\b", r"chimeric antigen receptor"]),
+    ("CAR-M",      [r"CAR[-\s]macrophage", r"\bCAR-Ms\b",
+                    r"chimeric antigen receptor[^.]{0,40}macrophage",
+                    r"\bCAR-M\b[^.]{0,60}macrophage", r"macrophage[^.]{0,60}\bCAR-M\b"]),
+    ("CAR-Treg",   [r"CAR[-\s]?Tregs?\b", r"chimeric antigen receptor[^.]{0,40}regulatory T"]),
+    ("CAR-NKT",    [r"CAR[-\s]?i?NKT", r"chimeric antigen receptor[^.]{0,40}NKT"]),
+    ("CAR-γδT",    [r"CAR[-\s]?gamma[-\s]?delta", r"CAR[-\s]?γδ",
+                    r"chimeric antigen receptor[^.]{0,40}(gamma delta|γδ)"]),
+    ("CAR-neutrophil", [r"CAR[-\s]?neutrophil"]),
+    # Includes pre-2010 names and spellings that never write out "CAR-T", so
+    # the founding literature is findable under the modern term.
+    ("CAR-T",      [r"CAR[-\s]?T\b", r"chimeric antigen receptor",
+                    r"\bT-bod(y|ies)\b", r"chimeric immunoreceptor",
+                    r"chimeric immune receptor", r"chimeric T[-\s]cell receptor",
+                    r"\bUniCAR\b", r"\bCAR (construct|therap|platform|cell)",
+                    r"\b(CD19|BCMA|CD22|GD2|HER2|CD7|CD20|CD30)[-\s]CAR\b",
+                    r"tisagenlecleucel", r"cabtagene", r"\b(axi|tisa|liso|ide|cilta|brexu|obe)-cel\b",
+                    r"Kymriah|Yescarta|Tecartus|Breyanzi|Abecma|Carvykti|Aucatzyl"]),
     ("in vivo",    [r"\bin vivo\b[^.]{0,50}\bCAR\b", r"lipid nanoparticle", r"\bLNP\b"]),
     ("Autoimmune", [r"autoimmun", r"\bSLE\b", r"lupus", r"myasthenia", r"pemphigus",
                     r"multiple sclerosis", r"myositis", r"scleroderma", r"arthritis",
@@ -78,7 +155,100 @@ CATEGORY_RULES = [
                        r"scale[-\s]?up", r"cryopreserv"]),
     ("Toxicity",   [r"cytokine release syndrome", r"\bCRS\b", r"\bICANS\b", r"neurotoxicity",
                     r"on-target off-tumor", r"adverse event"]),
+    ("Approved product", [r"tisagenlecleucel", r"cabtagene", r"\baxi-cel\b", r"\btisa-cel\b",
+                          r"\bliso-cel\b", r"\bide-cel\b", r"\bcilta-cel\b", r"\bbrexu-cel\b",
+                          r"\bobe-cel\b", r"Kymriah", r"Yescarta", r"Tecartus", r"Breyanzi",
+                          r"Abecma", r"Carvykti", r"Aucatzyl"]),
+    ("Early era",  [r"\bT-bod(y|ies)\b", r"chimeric immunoreceptor",
+                    r"chimeric immune receptor", r"chimeric T[-\s]cell receptor"]),
+    # --- non-CAR synthetic receptor platforms ---
+    ("BAR",        [r"B[-\s]cell antibody receptor", r"\bBAR[-\s]Tregs?\b",
+                    r"\bBAR[-\s]T cells?\b"]),
+    ("AIR",        [r"artificial immune receptor", r"\bAIR[-\s]Tregs?\b",
+                    r"\bCD40[-\s]AIR\b"]),
+    ("synNotch",   [r"syn[-\s]?Notch", r"synthetic Notch", r"\bSNIPR\b"]),
+    ("TRuC/TFP",   [r"\bTRuCs?\b", r"T cell receptor fusion (construct|protein)",
+                    r"\bTCR fusion\b"]),
+    ("CER",        [r"chimeric engulfment receptor", r"\bCER[-\s]?T\b"]),
+    ("iCAR/switch",[r"inhibitory chimeric antigen receptor", r"\biCARs?\b",
+                    r"chimeric switch receptor", r"chimeric costimulatory receptor"]),
 ]
+# --------------------------------------------------------------- disease axis
+# Deliberately finer than the broad category tags: the point is to be able to
+# ask "what is being tried in myasthenia gravis" and get an answer, which a
+# single "Autoimmune" bucket cannot give.
+DISEASE_RULES = [
+    # --- haematologic malignancy ---
+    ("B-ALL",            [r"\bB[-\s]?ALL\b", r"B[-\s]cell acute lymphoblastic",
+                          r"acute lymphoblastic leukemi|leukaemi"]),
+    ("T-ALL",            [r"\bT[-\s]?ALL\b", r"T[-\s]cell acute lymphoblastic"]),
+    ("AML",              [r"\bAML\b", r"acute myeloid leukemi|leukaemi"]),
+    ("CLL",              [r"\bCLL\b", r"chronic lymphocytic leukemi|leukaemi"]),
+    ("DLBCL/NHL",        [r"\bDLBCL\b", r"diffuse large B[-\s]cell lymphoma",
+                          r"non[-\s]Hodgkin", r"follicular lymphoma",
+                          r"mantle cell lymphoma", r"\bMCL\b"]),
+    ("Hodgkin lymphoma", [r"Hodgkin lymphoma", r"Hodgkin's disease"]),
+    ("Multiple myeloma", [r"multiple myeloma", r"\bMM\b(?![-\s]?\d)", r"plasma cell myeloma"]),
+    ("T-cell lymphoma",  [r"T[-\s]cell lymphoma", r"cutaneous T[-\s]cell",
+                          r"peripheral T[-\s]cell lymphoma"]),
+    # --- solid tumour ---
+    ("Glioma/GBM",       [r"glioblastoma", r"\bGBM\b", r"glioma", r"\bDIPG\b",
+                          r"diffuse midline glioma"]),
+    ("Neuroblastoma",    [r"neuroblastoma"]),
+    ("Sarcoma",          [r"sarcoma", r"osteosarcoma", r"Ewing"]),
+    ("Lung cancer",      [r"lung cancer", r"\bNSCLC\b", r"\bSCLC\b",
+                          r"lung adenocarcinoma"]),
+    ("Breast cancer",    [r"breast cancer", r"breast carcinoma", r"\bTNBC\b"]),
+    ("Pancreatic cancer",[r"pancreatic cancer", r"pancreatic ductal adenocarcinoma", r"\bPDAC\b"]),
+    ("Liver cancer",     [r"hepatocellular carcinoma", r"\bHCC\b", r"liver cancer"]),
+    ("Gastric/CRC",      [r"gastric cancer", r"colorectal cancer", r"\bCRC\b",
+                          r"colon cancer", r"gastroesophageal"]),
+    ("Ovarian cancer",   [r"ovarian cancer", r"ovarian carcinoma"]),
+    ("Prostate cancer",  [r"prostate cancer", r"prostate carcinoma"]),
+    ("Renal cancer",     [r"renal cell carcinoma", r"\bRCC\b", r"kidney cancer"]),
+    ("Melanoma",         [r"melanoma"]),
+    ("Mesothelioma",     [r"mesothelioma"]),
+    ("Head and neck",    [r"head and neck (squamous|cancer|carcinoma)", r"\bHNSCC\b"]),
+    # --- autoimmune / immune-mediated ---
+    ("SLE",              [r"\bSLE\b", r"systemic lupus erythematosus", r"lupus nephritis"]),
+    ("Myasthenia gravis",[r"myasthenia gravis", r"\bgMG\b",
+                          r"\bMuSK\b[^.]{0,60}myasthen", r"myasthen[^.]{0,60}\bMuSK\b"]),
+    ("Pemphigus",        [r"pemphigus", r"\bDsg[13]\b", r"desmoglein"]),
+    ("NMOSD",            [r"neuromyelitis optica", r"\bNMOSD?\b", r"aquaporin[-\s]?4", r"\bAQP4\b"]),
+    ("Multiple sclerosis",[r"multiple sclerosis", r"\bMS\b(?=[^.]{0,40}(patient|disease|treat))"]),
+    ("Rheumatoid arthritis",[r"rheumatoid arthritis", r"\bRA\b(?=[^.]{0,40}patient)"]),
+    ("Systemic sclerosis",[r"systemic sclerosis", r"scleroderma", r"\bSSc\b"]),
+    ("Myositis",         [r"myositis", r"dermatomyositis", r"\bIIM\b"]),
+    ("Type 1 diabetes",  [r"type 1 diabetes", r"\bT1D\b", r"autoimmune diabetes"]),
+    ("IBD",              [r"inflammatory bowel disease", r"Crohn", r"ulcerative colitis"]),
+    ("Sjogren",          [r"Sj[öo]gren"]),
+    ("ANCA vasculitis",  [r"\bANCA\b", r"vasculitis"]),
+    ("ITP/AIHA",         [r"immune thrombocytopeni", r"\bITP\b",
+                          r"autoimmune hemolytic|haemolytic anemia|anaemia"]),
+    ("Hemophilia inhibitor",[r"h(a)?emophilia", r"\bFVIII\b", r"factor VIII inhibitor"]),
+    # --- transplantation and other ---
+    ("GvHD/transplant",  [r"graft[-\s]versus[-\s]host", r"\bGvHD\b",
+                          r"transplant rejection", r"allograft tolerance"]),
+    ("Infection",        [r"\bHIV\b", r"hepatitis B virus", r"\bHBV\b",
+                          r"fungal infection", r"\bCMV\b"]),
+    ("Fibrosis",         [r"cardiac fibrosis", r"\bFAP\b[^.]{0,40}fibro", r"liver fibrosis"]),
+    ("Senescence",       [r"senescen", r"senolytic", r"\buPAR\b"]),
+]
+
+# --------------------------------------------------------------- target axis
+TARGET_RULES = [
+    (t, [rf"\b{re.escape(t)}\b"]) for t in
+    ["CD19", "CD20", "CD22", "CD30", "CD33", "CD38", "CD123", "CD7", "CD5",
+     "CD70", "BCMA", "GPRC5D", "SLAMF7", "FCRL5", "GD2", "HER2", "EGFRvIII",
+     "EGFR", "IL13Ra2", "B7-H3", "MUC1", "MUC16", "PSMA", "ROR1", "CEA",
+     "NKG2D", "FAP", "uPAR", "GPC3", "Claudin18.2", "CLDN18.2", "AQP4",
+     "MuSK", "Dsg3", "Dsg1", "PLA2R", "FVIII", "CD40L", "TL1A"]
+] + [
+    ("Mesothelin", [r"mesothelin"]),
+    ("AChR",       [r"\bAChR\b", r"acetylcholine receptor"]),
+    ("CD40",       [r"\bCD40\b(?![Ll])"]),
+]
+
 REVIEW_TYPES = {"Review", "Systematic Review", "Meta-Analysis"}
 TRIAL_TYPES = {"Clinical Trial", "Randomized Controlled Trial", "Clinical Trial, Phase I",
                "Clinical Trial, Phase II", "Clinical Trial, Phase III", "Observational Study"}
@@ -123,9 +293,16 @@ def classify(blob, rules):
     # A CAR-NK or CAAR-T paper says "chimeric antigen receptor" too, which
     # would otherwise tag it CAR-T. Keep CAR-T only when the T-cell form is
     # named explicitly.
-    if "CAR-T" in out and ("CAR-NK" in out or "CAAR-T" in out):
+    others = {"CAR-NK", "CAAR-T", "CAR-M", "CAR-Treg", "CAR-NKT",
+              "CAR-γδT", "CAR-neutrophil"}
+    if "CAR-T" in out and others & set(out):
         if not re.search(r"CAR[-\s]?T\b|chimeric antigen receptor[^.]{0,40}T cell", blob, re.I):
             out.remove("CAR-T")
+    # Umbrella tag: lets the reader separate CAR work from everything else in
+    # one click, without having to know each platform's acronym.
+    NON_CAR = {"BAR", "AIR", "synNotch", "TRuC/TFP", "CER"}
+    if NON_CAR & set(out):
+        out.append("Non-CAR platform")
     return out
 
 
@@ -259,6 +436,8 @@ def parse_article(art):
         "keywords": kw,
         "mesh": mesh,
         "category": classify(blob, CATEGORY_RULES),
+        "disease": classify(blob, DISEASE_RULES),
+        "target": classify(blob, TARGET_RULES),
         "pub_type": pub_type,
         "article_types": ptypes,
         "added_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -318,7 +497,8 @@ def slim(rec):
         "authors": rec["authors"], "first_author": rec["first_author"],
         "last_author": rec["last_author"], "journal": rec["journal"],
         "year": rec["year"], "date": rec["date"], "week": rec["week"],
-        "category": rec["category"], "pub_type": rec["pub_type"],
+        "category": rec["category"], "disease": rec.get("disease", []),
+        "target": rec.get("target", []), "pub_type": rec["pub_type"],
         "keywords": rec["keywords"][:12], "mesh": rec["mesh"][:14],
     }
 
@@ -452,6 +632,41 @@ def cmd_prune(args):
     print(f"pruned {removed_total} records")
 
 
+def cmd_retag(args):
+    """Recompute category and pub_type for stored records, offline.
+
+    Classification rules change as the field's vocabulary changes; the
+    bibliographic facts do not. This rewrites only the derived fields, leaving
+    titles, authors, dates and added_at untouched, and needs no PubMed call.
+    """
+    changed_files = changed_records = 0
+    for ip in sorted(DATA.glob("idx-*.json")):
+        idx = load_json(ip, {"records": []})
+        year = idx.get("year")
+        abs_ = load_json(shard_path("abs", year), {})
+        dirty = False
+        for r in idx["records"]:
+            blob = " ".join([r.get("title") or "", abs_.get(r["pmid"], ""),
+                             " ".join(r.get("keywords") or []),
+                             " ".join(r.get("mesh") or [])])
+            new = {
+                "category": classify(blob, CATEGORY_RULES),
+                "disease": classify(blob, DISEASE_RULES),
+                "target": classify(blob, TARGET_RULES),
+            }
+            if any(new[k] != r.get(k) for k in new):
+                r.update(new)
+                dirty = True
+                changed_records += 1
+        if dirty:
+            idx["updated_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            save_json(ip, idx)
+            changed_files += 1
+            print(f"  {year}: retagged")
+    write_manifest()
+    print(f"retagged {changed_records} records across {changed_files} years")
+
+
 def cmd_backfill(args):
     for year in range(args.from_year, args.to_year + 1):
         print(f"--- {year} ---")
@@ -467,9 +682,11 @@ def main():
     b.add_argument("--from", dest="from_year", type=int, required=True)
     b.add_argument("--to", dest="to_year", type=int, required=True)
     sub.add_parser("prune")
+    sub.add_parser("retag")
     args = ap.parse_args()
     DATA.mkdir(parents=True, exist_ok=True)
-    {"weekly": cmd_weekly, "backfill": cmd_backfill, "prune": cmd_prune}[args.cmd](args)
+    {"weekly": cmd_weekly, "backfill": cmd_backfill,
+     "prune": cmd_prune, "retag": cmd_retag}[args.cmd](args)
 
 
 if __name__ == "__main__":
