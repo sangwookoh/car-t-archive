@@ -94,8 +94,11 @@ QUERY = (
     # so the CAR view stays clean.
     #
     # Tolerance platforms that present an autoantigen instead of an scFv:
+    # "BAR-T" is overwhelmingly the Barrett's oesophagus cell line, so the bare
+    # abbreviation is NOT searched. The spelled-out name is unambiguous, and
+    # real BAR papers say "chimeric antigen/autoantibody receptor" too.
     'OR "B-cell antibody receptor"[tiab] OR "BAR Treg"[tiab] '
-    'OR "BAR Tregs"[tiab] OR "BAR T cells"[tiab] '
+    'OR "BAR Tregs"[tiab] '
     # AIR: inflammation biosensor, not an antigen binder. PubMed has no phrase
     # index entry for "artificial immune receptor", so proximity is required —
     # a plain quoted search returns zero.
@@ -109,8 +112,9 @@ QUERY = (
     'OR "chimeric engulfment receptor"[tiab] '
     'OR "antibody-coupled T cell receptor"[tiab] OR "ACTR T cells"[tiab] '
     'OR "HIT receptor"[tiab] OR "synthetic immune receptor"[tiab:~1] '
-    # CAR-adjacent control modules:
-    'OR "inhibitory chimeric antigen receptor"[tiab] OR "iCAR"[tiab] '
+    # CAR-adjacent control modules. Bare "iCAR" is omitted — it also denotes
+    # unrelated constructs; the spelled-out form is unambiguous.
+    'OR "inhibitory chimeric antigen receptor"[tiab] '
     'OR "chimeric switch receptor"[tiab] '
     'OR "chimeric costimulatory receptor"[tiab]) '
     'NOT (Editorial[pt] OR Comment[pt] OR Letter[pt] OR "Case Reports"[pt] '
@@ -173,6 +177,72 @@ CATEGORY_RULES = [
     ("iCAR/switch",[r"inhibitory chimeric antigen receptor", r"\biCARs?\b",
                     r"chimeric switch receptor", r"chimeric costimulatory receptor"]),
 ]
+# ------------------------------------------------- cell/gene therapy gate
+# A keyword can be right and the paper still wrong: "BAR-T" is usually the
+# Barrett's oesophagus cell line, "CAR-M" a cancer-cell-membrane nanoparticle,
+# "AIR" an airway abbreviation. Papers whose ONLY hook is such an abbreviation
+# must show, in the abstract, that an engineered receptor is being put into
+# cells. Papers matching an unambiguous term skip the gate entirely.
+
+# Terms specific enough that no corroboration is needed.
+UNAMBIGUOUS = [
+    r"chimeric antigen receptor", r"chimeric autoantibody receptor",
+    # MeSH inverts the word order, and a record with no abstract may carry
+    # nothing else. Without this, indexed papers get thrown away.
+    r"Receptors, Chimeric Antigen", r"Immunotherapy, Adoptive",
+    r"\bCAR[-\s]?T\b", r"\bCAR[-\s]?NK\b", r"\bCAAR[-\s]?T\b",
+    r"CAR[-\s]macrophage", r"CAR[-\s]?Tregs?\b", r"CAR[-\s]?i?NKT\b",
+    r"chimeric immunoreceptor", r"chimeric immune receptor",
+    r"chimeric T[-\s]cell receptor", r"\bT-bod(y|ies)\b",
+    r"B[-\s]cell antibody receptor", r"artificial immune receptor",
+    r"syn[-\s]?Notch", r"\bSNIPR\b", r"chimeric engulfment receptor",
+    r"T cell receptor fusion (construct|protein)",
+    r"tisagenlecleucel", r"cabtagene", r"\b(axi|tisa|liso|ide|cilta|brexu|obe)-cel\b",
+    r"Kymriah|Yescarta|Tecartus|Breyanzi|Abecma|Carvykti|Aucatzyl",
+]
+
+# Evidence that an engineered receptor is being introduced into cells.
+EVIDENCE = [
+    # receptor architecture
+    r"\bscFv\b", r"single[-\s]chain variable", r"\bCD3\s?[ζz]\b", r"CD3[-\s]?zeta",
+    r"costimulatory domain", r"co[-\s]stimulatory domain", r"\b4-1BB\b", r"\bCD28\b",
+    r"hinge", r"transmembrane domain", r"ectodomain", r"signaling domain",
+    r"binding domain", r"\bbinder\b",
+    # gene delivery
+    r"lentivir", r"retrovir", r"transduc", r"transfect", r"electroporat",
+    r"\bCRISPR\b", r"gene[-\s]edit", r"\bvector\b", r"piggyBac", r"sleeping beauty",
+    r"mRNA[-\s](delivery|encoding)", r"lipid nanoparticle",
+    # cell therapy practice
+    r"adoptive (transfer|cell|immunotherapy)", r"cell therapy", r"cellular therapy",
+    r"engineered (T|NK|immune|Treg)", r"infusion", r"leukapheres",
+    r"lymphodeplet", r"cytotoxicity assay", r"tumor (cell )?(killing|lysis)",
+    r"effector (cell|function)", r"immunotherap",
+]
+
+# Strong signals the match is something else entirely.
+EXCLUDE = [
+    r"Barrett", r"oesophag|esophag", r"bile acid receptor", r"\bFXR\b", r"\bTGR5\b",
+    r"cell membrane[-\s]coat", r"membrane[-\s]coated nanoparticle",
+    r"airway (inflammation|resistance|hyperrespons)", r"\bCAR[-\s]?M\b.{0,30}nano",
+]
+
+
+def is_cell_gene_therapy(blob):
+    """True when the abstract supports reading this as cell/gene therapy.
+
+    Returns (verdict, reason) so the audit command can explain itself.
+    """
+    if any(re.search(p, blob, re.I) for p in UNAMBIGUOUS):
+        return True, "unambiguous term"
+    hits = [p for p in EVIDENCE if re.search(p, blob, re.I)]
+    bad = [p for p in EXCLUDE if re.search(p, blob, re.I)]
+    if len(hits) >= 2 and not bad:
+        return True, f"{len(hits)} evidence signals"
+    if bad:
+        return False, "excluded context"
+    return False, f"only {len(hits)} evidence signal(s)"
+
+
 # --------------------------------------------------------------- disease axis
 # Deliberately finer than the broad category tags: the point is to be able to
 # ask "what is being tried in myasthenia gravis" and get an answer, which a
@@ -412,6 +482,13 @@ def parse_article(art):
     ptypes = [text_of(p) for p in a.findall("./PublicationTypeList/PublicationType")] if a is not None else []
 
     blob = " ".join([title, abstract, " ".join(kw), " ".join(mesh)])
+
+    # Gate before anything else: a keyword hit is not a reason to keep a paper
+    # about a cell line that happens to share an abbreviation.
+    ok, why = is_cell_gene_therapy(blob)
+    if not ok:
+        return {"_rejected": True, "pmid": pmid, "title": title, "reason": why}
+
     if set(ptypes) & REVIEW_TYPES:
         pub_type = "Review"
     elif set(ptypes) & TRIAL_TYPES:
@@ -444,8 +521,8 @@ def parse_article(art):
     }
 
 
-def efetch(pmids, batch=200):
-    out = []
+def efetch(pmids, batch=200, show_rejects=8):
+    out, rejected = [], []
     for i in range(0, len(pmids), batch):
         chunk = pmids[i:i + batch]
         xml = _get(_url("efetch.fcgi", id=",".join(chunk), retmode="xml"))
@@ -456,10 +533,18 @@ def efetch(pmids, batch=200):
             continue
         for art in root.findall("PubmedArticle"):
             rec = parse_article(art)
-            if rec:
+            if not rec:
+                continue
+            if rec.get("_rejected"):
+                rejected.append(rec)
+            else:
                 out.append(rec)
         print(f"  efetch {min(i + batch, len(pmids))}/{len(pmids)}")
         time.sleep(DELAY)
+    if rejected:
+        print(f"  gate rejected {len(rejected)} not-cell/gene-therapy papers; e.g.")
+        for r in rejected[:show_rejects]:
+            print(f"    - {r['pmid']} ({r['reason']}): {r['title'][:72]}")
     return out
 
 
@@ -606,14 +691,26 @@ def cmd_prune(args):
     removed_total = 0
     for ip in sorted(DATA.glob("idx-*.json")):
         idx = load_json(ip, {"records": []})
-        keep = [r for r in idx["records"] if r["pmid"] in valid]
-        dropped = [r["pmid"] for r in idx["records"] if r["pmid"] not in valid]
+        year = idx.get("year")
+        abs_map = load_json(shard_path("abs", year), {})
+
+        def survives(r):
+            if r["pmid"] not in valid:
+                return False, "outside query"
+            blob = " ".join([r.get("title") or "", abs_map.get(r["pmid"], ""),
+                             " ".join(r.get("keywords") or []),
+                             " ".join(r.get("mesh") or [])])
+            ok, why = is_cell_gene_therapy(blob)
+            return ok, why
+
+        verdicts = {r["pmid"]: survives(r) for r in idx["records"]}
+        keep = [r for r in idx["records"] if verdicts[r["pmid"]][0]]
+        dropped = [r["pmid"] for r in idx["records"] if not verdicts[r["pmid"]][0]]
         if not dropped:
             continue
-        year = idx.get("year")
         for r in idx["records"]:
-            if r["pmid"] not in valid:
-                print(f"  drop {year} {r['pmid']}: {r['title'][:70]}")
+            if not verdicts[r["pmid"]][0]:
+                print(f"  drop {year} {r['pmid']} ({verdicts[r['pmid']][1]}): {r['title'][:66]}")
         idx["records"] = keep
         idx["count"] = len(keep)
         idx["updated_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -623,10 +720,9 @@ def cmd_prune(args):
             ip.unlink()
         ap = shard_path("abs", year)
         if ap.exists():
-            abs_ = load_json(ap, {})
             for pmid in dropped:
-                abs_.pop(pmid, None)
-            save_json(ap, abs_) if abs_ else ap.unlink()
+                abs_map.pop(pmid, None)
+            save_json(ap, abs_map) if abs_map else ap.unlink()
         removed_total += len(dropped)
     write_manifest()
     print(f"pruned {removed_total} records")
@@ -667,6 +763,39 @@ def cmd_retag(args):
     print(f"retagged {changed_records} records across {changed_files} years")
 
 
+def cmd_audit(args):
+    """Dry run of the cell/gene-therapy gate over stored records.
+
+    Changes nothing. Use it to see what prune would remove, and to sanity-check
+    the gate before trusting it with the archive.
+    """
+    total = flagged = 0
+    reasons, samples = {}, []
+    for ip in sorted(DATA.glob("idx-*.json")):
+        idx = load_json(ip, {"records": []})
+        year = idx.get("year")
+        abs_map = load_json(shard_path("abs", year), {})
+        for r in idx["records"]:
+            total += 1
+            blob = " ".join([r.get("title") or "", abs_map.get(r["pmid"], ""),
+                             " ".join(r.get("keywords") or []),
+                             " ".join(r.get("mesh") or [])])
+            ok, why = is_cell_gene_therapy(blob)
+            if ok:
+                continue
+            flagged += 1
+            reasons[why] = reasons.get(why, 0) + 1
+            if len(samples) < 40:
+                has_abs = "abstract" if abs_map.get(r["pmid"]) else "NO ABSTRACT"
+                samples.append(f"  {year} {r['pmid']} [{why}; {has_abs}] {r['title'][:66]}")
+    print(f"audited {total} records; gate would reject {flagged} "
+          f"({100 * flagged / max(total, 1):.1f}%)")
+    for why, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:6d}  {why}")
+    print("\nsamples:")
+    print("\n".join(samples))
+
+
 def cmd_backfill(args):
     for year in range(args.from_year, args.to_year + 1):
         print(f"--- {year} ---")
@@ -683,10 +812,11 @@ def main():
     b.add_argument("--to", dest="to_year", type=int, required=True)
     sub.add_parser("prune")
     sub.add_parser("retag")
+    sub.add_parser("audit")
     args = ap.parse_args()
     DATA.mkdir(parents=True, exist_ok=True)
-    {"weekly": cmd_weekly, "backfill": cmd_backfill,
-     "prune": cmd_prune, "retag": cmd_retag}[args.cmd](args)
+    {"weekly": cmd_weekly, "backfill": cmd_backfill, "prune": cmd_prune,
+     "retag": cmd_retag, "audit": cmd_audit}[args.cmd](args)
 
 
 if __name__ == "__main__":
