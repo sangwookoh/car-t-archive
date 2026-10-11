@@ -1,0 +1,423 @@
+<title>CAR-T Publication Archive</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: masthead, sticky control rail, single reading column; network view swaps the column for a canvas */
+:root{
+  --paper:#f6f7f5; --surface:#ffffff; --ink:#151a18; --ink-soft:#4e5a55; --ink-faint:#7d8884;
+  --rule:#dde2de; --rule-soft:#e9ede9;
+  --accent:#0e6b58; --accent-soft:#e2efea; --accent-ink:#0a5244;
+  --mark:#fdf0c9; --amber:#9a5b16; --amber-soft:#fbf1e3;
+  --font-display:"Newsreader",Georgia,"Times New Roman",serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#101311; --surface:#171b19; --ink:#e8ece9; --ink-soft:#a3aeaa; --ink-faint:#78827e;
+  --rule:#2a302d; --rule-soft:#222725;
+  --accent:#4fcbaa; --accent-soft:#17302a; --accent-ink:#8fe3cb;
+  --mark:#4a3d12; --amber:#d49a53; --amber-soft:#2b2317; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#101311; --surface:#171b19; --ink:#e8ece9; --ink-soft:#a3aeaa; --ink-faint:#78827e;
+  --rule:#2a302d; --rule-soft:#222725;
+  --accent:#4fcbaa; --accent-soft:#17302a; --accent-ink:#8fe3cb;
+  --mark:#4a3d12; --amber:#d49a53; --amber-soft:#2b2317; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;padding-inline:20px;padding-block:28px 56px}
+
+header.masthead{border-bottom:2px solid var(--ink);padding-bottom:14px}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+h1{font-family:var(--font-display);font-weight:600;font-size:clamp(26px,4.4vw,38px);line-height:1.1;margin:.28em 0 .22em;text-wrap:balance;letter-spacing:-.01em}
+.sub{color:var(--ink-soft);font-size:14px;max-width:64ch}
+.meta-row{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:12px;font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.meta-row b{color:var(--ink-soft);font-weight:500}
+
+nav.views{display:flex;gap:2px;margin-top:18px;border-bottom:1px solid var(--rule)}
+nav.views button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:9px 14px;font:inherit;font-size:13.5px;color:var(--ink-soft);cursor:pointer}
+nav.views button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+nav.views button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+.controls{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);padding-block:14px 12px;border-bottom:1px solid var(--rule)}
+.searchline{display:flex;gap:10px;flex-wrap:wrap}
+.field{flex:1 1 280px;min-width:0;position:relative;display:flex;align-items:center}
+.field input{width:100%;min-width:0;padding:11px 13px 11px 36px;font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:3px}
+.field input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+.field svg{position:absolute;left:12px;width:15px;height:15px;stroke:var(--ink-faint);fill:none;stroke-width:2;pointer-events:none}
+select{padding:11px 10px;font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:3px;min-width:0}
+.scopes{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink-soft)}
+.scopes label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.scopes input{accent-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.chip{appearance:none;font:inherit;font-size:12.5px;cursor:pointer;padding:4px 11px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-soft)}
+.chip .n{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-left:5px;font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
+.chip[aria-pressed="true"] .n{color:var(--accent-ink)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+.status{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding-block:14px 4px;font-size:13px;color:var(--ink-soft)}
+.status .count{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.linkish{appearance:none;background:none;border:0;padding:0;font:inherit;font-size:13px;color:var(--accent-ink);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.scopebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:9px 13px;margin-top:12px;border:1px dashed var(--rule);border-radius:3px;background:var(--surface);font-size:12.5px;color:var(--ink-soft)}
+.scopebar b{font-family:var(--font-mono);color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+
+ol.results{list-style:none;margin:0;padding:0}
+li.rec{border-bottom:1px solid var(--rule-soft);padding-block:18px}
+li.rec:first-child{border-top:1px solid var(--rule)}
+.rec h2{font-family:var(--font-display);font-size:19px;font-weight:600;line-height:1.3;margin:0 0 7px;text-wrap:balance}
+.rec h2 a{color:var(--ink);text-decoration:none;background-image:linear-gradient(var(--rule),var(--rule));background-size:100% 1px;background-position:0 100%;background-repeat:no-repeat}
+.rec h2 a:hover{background-image:linear-gradient(var(--accent),var(--accent))}
+.byline{font-size:13.5px;color:var(--ink-soft);line-height:1.55}
+.byline .last{color:var(--ink);font-weight:600}
+.byline .au{cursor:pointer;border-bottom:1px dotted var(--rule)}
+.byline .au:hover{color:var(--accent-ink);border-bottom-color:var(--accent)}
+.src{font-family:var(--font-mono);font-size:12px;color:var(--ink-faint);margin-top:6px;font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:4px 12px}
+.src em{font-style:normal;color:var(--ink-soft)}
+.src a{color:var(--accent-ink);text-decoration:none}
+.src a:hover{text-decoration:underline}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;align-items:center}
+.tag{font-size:11px;font-family:var(--font-mono);letter-spacing:.03em;padding:2px 8px;border-radius:2px;background:var(--accent-soft);color:var(--accent-ink);cursor:pointer;border:0}
+.tag.t-type{background:transparent;color:var(--ink-faint);border:1px solid var(--rule);cursor:default}
+.tag.t-sum{background:var(--amber-soft);color:var(--amber);border:0;cursor:default}
+.ko{margin-top:11px;padding:11px 14px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 3px 3px 0}
+.ko .lbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:5px}
+.ko p{margin:0;font-size:14px;line-height:1.68;color:var(--ink-soft);max-width:68ch}
+details.abs{margin-top:9px}
+details.abs summary{font-size:12.5px;color:var(--ink-faint);cursor:pointer;list-style:none;display:inline-flex;gap:5px;align-items:center}
+details.abs summary::-webkit-details-marker{display:none}
+details.abs summary::before{content:"▸";font-size:10px;transition:transform .15s}
+details.abs[open] summary::before{transform:rotate(90deg)}
+details.abs p{font-size:13.5px;color:var(--ink-soft);max-width:70ch;margin:8px 0 0;line-height:1.62}
+mark{background:var(--mark);color:inherit;padding:0 1px;border-radius:2px}
+
+.empty{padding:48px 0;text-align:center;color:var(--ink-soft)}
+.empty strong{display:block;font-family:var(--font-display);font-size:19px;color:var(--ink);margin-bottom:6px}
+
+.netwrap{border:1px solid var(--rule);border-radius:3px;background:var(--surface);margin-top:18px;overflow:hidden}
+#net{display:block;width:100%;height:460px;touch-action:pan-y}
+.netnote{font-size:12.5px;color:var(--ink-faint);padding:10px 14px;border-top:1px solid var(--rule-soft);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.authorlist{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft)}
+.authorlist button{appearance:none;text-align:left;font:inherit;background:var(--surface);border:0;padding:10px 13px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:baseline;color:var(--ink)}
+.authorlist button:hover{background:var(--accent-soft);color:var(--accent-ink)}
+.authorlist .nm{font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.authorlist .ct{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+h3.secttl{font-family:var(--font-display);font-size:17px;font-weight:600;margin:30px 0 0}
+h3.secttl + p{font-size:13px;color:var(--ink-soft);margin:5px 0 0;max-width:64ch}
+
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--rule);font-size:12px;color:var(--ink-faint);line-height:1.7}
+footer code{font-family:var(--font-mono);font-size:11px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:520px){.wrap{padding-block:20px 40px}#net{height:380px}}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">ImmuneTherapy Lab · Literature Archive</div>
+    <h1>CAR-T Publication Archive</h1>
+    <p class="sub">CAR-T · CAAR-T · CAR-NK 문헌을 PubMed에서 주 단위로 누적합니다. 레코드는 추가만 되고 과거 기록은 변경되지 않으며, 저자 색인과 공저자 관계도는 데이터에서 자동 생성됩니다.</p>
+    <div class="meta-row">
+      <span><b id="m-count">—</b> records</span>
+      <span>Source <b>PubMed (NCBI)</b></span>
+      <span>Updated <b id="m-gen">—</b></span>
+      <span id="m-span">—</span>
+    </div>
+  </header>
+
+  <nav class="views" role="tablist">
+    <button role="tab" id="tab-list" aria-selected="true" aria-controls="view-list">논문 목록</button>
+    <button role="tab" id="tab-net" aria-selected="false" aria-controls="view-net">저자 관계도</button>
+  </nav>
+
+  <section id="view-list" role="tabpanel" aria-labelledby="tab-list">
+    <div class="controls">
+      <div class="searchline">
+        <div class="field">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+          <input id="q" type="search" placeholder="제목·저자·저널·키워드·MeSH 검색  (예: CAAR, June C, pemphigus)" autocomplete="off">
+        </div>
+        <select id="year" aria-label="연도"><option value="">불러온 연도 전체</option></select>
+        <select id="sort" aria-label="정렬">
+          <option value="date">최신순</option>
+          <option value="old">오래된순</option>
+          <option value="journal">저널명</option>
+          <option value="last">교신저자</option>
+        </select>
+      </div>
+      <div class="scopes">
+        <label><input type="checkbox" id="sc-last"> 교신저자(마지막 저자)만 매칭</label>
+        <label><input type="checkbox" id="sc-and"> 선택 태그 모두 만족(AND)</label>
+        <label><input type="checkbox" id="sc-sum"> 한국어 요약 있는 것만</label>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="status">
+      <span><span class="count" id="n">—</span> / <span id="ntot">—</span> 건<span id="activefilter"></span></span>
+      <button class="linkish" id="reset" hidden>필터 초기화</button>
+    </div>
+
+    <div class="scopebar" id="scopebar" hidden>
+      <span>현재 <b id="loadedyears">—</b> 연도만 불러온 상태입니다. 전체 <b id="allcount">—</b>건 중 <b id="loadedcount">—</b>건 검색 중.</span>
+      <button class="linkish" id="loadall">전체 연도 불러오기</button>
+    </div>
+
+    <ol class="results" id="list"></ol>
+    <div class="empty" id="empty" hidden>
+      <strong>결과가 없습니다</strong>
+      검색어를 줄이거나 태그 선택을 해제해 보세요. 과거 연도는 위의 전체 불러오기가 필요할 수 있습니다.
+    </div>
+  </section>
+
+  <section id="view-net" role="tabpanel" aria-labelledby="tab-net" hidden>
+    <h3 class="secttl">공저자 관계도</h3>
+    <p>불러온 레코드에서 같은 논문에 함께 등장한 저자를 연결한 그래프입니다. 노드 크기는 논문 수, 선 굵기는 공저 횟수입니다.</p>
+    <div class="netwrap">
+      <canvas id="net"></canvas>
+      <div class="netnote"><span id="netstat">—</span><span>노드 클릭 시 해당 저자 검색</span></div>
+    </div>
+    <h3 class="secttl">교신저자 색인</h3>
+    <p>마지막 저자 기준 집계입니다. 분야의 주요 그룹이 데이터에서 그대로 드러납니다.</p>
+    <div class="authorlist" id="authors"></div>
+  </section>
+
+  <footer>
+    서지 정보 출처: PubMed (NCBI E-utilities). 각 레코드의 PMID·DOI 링크로 원문을 확인하십시오.<br>
+    이 페이지는 <code>data/</code> 의 연도별 JSON에서 전부 생성됩니다. 매주 신규 레코드만 추가되며 과거 레코드는 변경되지 않습니다.
+  </footer>
+</div>
+
+<script>
+const S={rows:[],abs:{},sum:{},loaded:new Set(),manifest:null,
+  tags:new Set(),q:"",year:"",sort:"date",last:false,and:false,onlySum:false,view:"list"};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const DEFAULT_YEARS=2;
+
+function terms(q){return q.toLowerCase().split(/\s+/).filter(t=>t.length>1)}
+function hl(text,ts){let o=esc(text);if(!ts.length)return o;
+  for(const t of ts){const r=new RegExp("("+t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig");o=o.replace(r,"<mark>$1</mark>")}
+  return o}
+
+function hay(r){
+  if(S.last) return (r.last_author||"").toLowerCase();
+  if(!r._h) r._h=[r.title,r.journal,(r.authors||[]).join(" "),(r.keywords||[]).join(" "),
+    (r.mesh||[]).join(" "),(r.category||[]).join(" "),r.pmid,r.doi].join(" ").toLowerCase();
+  return r._h;
+}
+
+function filtered(){
+  const ts=terms(S.q);
+  return S.rows.filter(r=>{
+    if(S.year && String(r.year)!==S.year) return false;
+    if(S.onlySum && !S.sum[r.pmid]) return false;
+    if(S.tags.size){
+      const c=r.category||[];
+      const ok=S.and?[...S.tags].every(t=>c.includes(t)):[...S.tags].some(t=>c.includes(t));
+      if(!ok) return false;
+    }
+    if(ts.length){const h=hay(r);if(!ts.every(t=>h.includes(t))) return false}
+    return true;
+  }).sort((a,b)=>{
+    if(S.sort==="date") return (b.date||"").localeCompare(a.date||"");
+    if(S.sort==="old")  return (a.date||"").localeCompare(b.date||"");
+    if(S.sort==="journal") return (a.journal||"").localeCompare(b.journal||"");
+    return (a.last_author||"zz").localeCompare(b.last_author||"zz");
+  });
+}
+
+function byline(r,ts){
+  const a=r.authors||[];if(!a.length)return "";
+  const show=a.length>9?[...a.slice(0,6),"\u2026",...a.slice(-2)]:a;
+  return show.map(n=>{
+    if(n==="\u2026")return '<span style="color:var(--ink-faint)"> \u2026 </span>';
+    const isLast=n===a[a.length-1]&&a.length>1;
+    return '<span class="au'+(isLast?' last':'')+'" data-au="'+esc(n)+'">'+hl(n,ts)+'</span>';
+  }).join(", ");
+}
+
+function render(){
+  const rows=filtered(),ts=terms(S.q),MAX=400;
+  $("n").textContent=rows.length;$("ntot").textContent=S.rows.length;
+  $("reset").hidden=!(S.q||S.year||S.tags.size||S.onlySum);
+  $("activefilter").textContent=S.last&&S.q?" · 교신저자 매칭":"";
+  $("empty").hidden=rows.length>0;
+  $("list").innerHTML=rows.slice(0,MAX).map(r=>{
+    const cats=(r.category||[]).map(c=>'<button class="tag" data-tag="'+esc(c)+'">'+esc(c)+'</button>').join("");
+    const ko=S.sum[r.pmid];
+    const url=r.doi?("https://doi.org/"+r.doi):("https://pubmed.ncbi.nlm.nih.gov/"+r.pmid+"/");
+    return '<li class="rec" data-pmid="'+esc(r.pmid)+'" data-year="'+esc(r.year||"")+'">'+
+      '<h2><a href="'+esc(url)+'" target="_blank" rel="noopener">'+hl(r.title,ts)+'</a></h2>'+
+      '<div class="byline">'+byline(r,ts)+'</div>'+
+      '<div class="src"><em>'+hl(r.journal||"",ts)+'</em><span>'+esc(r.date||r.year||"")+'</span>'+
+        '<a href="https://pubmed.ncbi.nlm.nih.gov/'+esc(r.pmid)+'/" target="_blank" rel="noopener">PMID '+esc(r.pmid)+'</a>'+
+        (r.doi?'<a href="https://doi.org/'+esc(r.doi)+'" target="_blank" rel="noopener">DOI</a>':'')+
+        (r.week?'<span>'+esc(r.week)+'</span>':'')+
+      '</div>'+
+      '<div class="tags">'+cats+'<span class="tag t-type">'+esc(r.pub_type||"Original")+'</span>'+
+        (ko?'<span class="tag t-sum">한국어 요약</span>':'')+'</div>'+
+      (ko?'<div class="ko"><span class="lbl">핵심 요약</span><p>'+hl(ko.ko,ts)+'</p></div>':'')+
+      '<details class="abs"><summary>초록</summary><p data-abs>불러오는 중\u2026</p></details>'+
+    '</li>';
+  }).join("")+(rows.length>MAX?'<li class="rec" style="color:var(--ink-faint);font-size:13px">상위 '+MAX+'건만 표시했습니다. 검색어나 태그로 범위를 좁혀 주세요.</li>':"");
+}
+
+/* ---------- data loading ---------- */
+async function loadYear(y){
+  if(S.loaded.has(y))return;
+  S.loaded.add(y);
+  const [idx,sum]=await Promise.all([
+    fetch("data/idx-"+y+".json").then(r=>r.ok?r.json():{records:[]}).catch(()=>({records:[]})),
+    fetch("data/sum-"+y+".json").then(r=>r.ok?r.json():{}).catch(()=>({}))
+  ]);
+  S.rows=S.rows.concat(idx.records||[]);
+  Object.assign(S.sum,sum);
+}
+async function loadAbs(y){
+  if(S.abs[y])return S.abs[y];
+  S.abs[y]=await fetch("data/abs-"+y+".json").then(r=>r.ok?r.json():{}).catch(()=>({}));
+  return S.abs[y];
+}
+function updateScopebar(){
+  const all=S.manifest?S.manifest.total:S.rows.length;
+  const done=S.loaded.size>= (S.manifest?S.manifest.years.length:1);
+  $("scopebar").hidden=done;
+  $("loadedyears").textContent=[...S.loaded].sort().reverse().join(", ");
+  $("allcount").textContent=all;$("loadedcount").textContent=S.rows.length;
+}
+async function loadAllYears(){
+  $("loadall").textContent="불러오는 중\u2026";
+  for(const y of S.manifest.years.map(x=>x.year)) await loadYear(y);
+  buildChips();buildAuthors();render();updateScopebar();
+  $("loadall").textContent="전체 연도 불러오기";
+}
+
+/* ---------- facets ---------- */
+function buildChips(){
+  const c={};S.rows.forEach(r=>(r.category||[]).forEach(t=>c[t]=(c[t]||0)+1));
+  $("chips").innerHTML=Object.entries(c).sort((a,b)=>b[1]-a[1])
+    .map(([t,n])=>'<button class="chip" aria-pressed="'+S.tags.has(t)+'" data-tag="'+esc(t)+'">'+esc(t)+'<span class="n">'+n+'</span></button>').join("");
+  const sel=$("year"),cur=sel.value;
+  sel.innerHTML='<option value="">불러온 연도 전체</option>'+
+    (S.manifest?S.manifest.years:[]).map(y=>'<option value="'+y.year+'">'+y.year+' ('+y.count+')</option>').join("");
+  sel.value=cur;
+  const ys=(S.manifest?S.manifest.years.map(y=>y.year):[]).filter(Boolean);
+  if(ys.length)$("m-span").textContent=Math.min(...ys)+"\u2013"+Math.max(...ys);
+}
+function toggleTag(t){S.tags.has(t)?S.tags.delete(t):S.tags.add(t);
+  document.querySelectorAll('#chips .chip').forEach(b=>b.setAttribute("aria-pressed",S.tags.has(b.dataset.tag)));
+  render()}
+
+/* ---------- author index + network ---------- */
+let NET=null;
+function buildAuthors(){
+  const last={},all={},pairs={};
+  S.rows.forEach(r=>{
+    if(r.last_author) last[r.last_author]=(last[r.last_author]||0)+1;
+    const a=[...new Set(r.authors||[])];
+    a.forEach(n=>all[n]=(all[n]||0)+1);
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
+      const k=[a[i],a[j]].sort().join("\u0000");pairs[k]=(pairs[k]||0)+1;}
+  });
+  $("authors").innerHTML=Object.entries(last).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,24)
+    .map(([n,c])=>'<button data-au="'+esc(n)+'"><span class="nm">'+esc(n)+'</span><span class="ct">'+c+'</span></button>').join("");
+  const top=Object.entries(all).sort((a,b)=>b[1]-a[1]).slice(0,45).map(([n,c])=>({id:n,w:c}));
+  const idx=new Map(top.map((d,i)=>[d.id,i])),edges=[];
+  Object.entries(pairs).forEach(([k,w])=>{const [x,y]=k.split("\u0000");
+    if(idx.has(x)&&idx.has(y))edges.push({s:idx.get(x),t:idx.get(y),w});});
+  NET={nodes:top,edges};
+  $("netstat").textContent=top.length+"명 · "+edges.length+"개 공저 관계";
+}
+function drawNet(){
+  const cv=$("net");if(!NET||!NET.nodes.length||!cv.clientWidth)return;
+  const dpr=Math.min(devicePixelRatio||1,2),W=cv.clientWidth,H=cv.clientHeight;
+  cv.width=W*dpr;cv.height=H*dpr;const ctx=cv.getContext("2d");ctx.scale(dpr,dpr);
+  const cs=getComputedStyle(document.documentElement);
+  const cAcc=cs.getPropertyValue("--accent").trim(),cRule=cs.getPropertyValue("--rule").trim(),cInk=cs.getPropertyValue("--ink-soft").trim();
+  const N=NET.nodes;
+  if(N[0].x===undefined){
+    N.forEach((n,i)=>{const a=i/N.length*Math.PI*2,r=Math.min(W,H)*0.33;
+      n.x=W/2+Math.cos(a)*r*(0.6+((i*37)%50)/100);n.y=H/2+Math.sin(a)*r*(0.6+((i*53)%50)/100);n.vx=0;n.vy=0});
+    for(let s=0;s<260;s++){
+      N.forEach(a=>{N.forEach(b=>{if(a===b)return;const dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy||1;
+        if(d2<40000){const f=900/d2;a.vx+=dx*f;a.vy+=dy*f}})});
+      NET.edges.forEach(e=>{const a=N[e.s],b=N[e.t],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+        const f=(d-70)*0.012*Math.min(e.w,3);a.vx+=dx/d*f;a.vy+=dy/d*f;b.vx-=dx/d*f;b.vy-=dy/d*f});
+      N.forEach(n=>{n.vx+=(W/2-n.x)*0.004;n.vy+=(H/2-n.y)*0.004;
+        n.x+=n.vx*=0.82;n.y+=n.vy*=0.82;
+        n.x=Math.max(46,Math.min(W-46,n.x));n.y=Math.max(20,Math.min(H-20,n.y))});
+    }
+  }
+  ctx.clearRect(0,0,W,H);
+  NET.edges.forEach(e=>{const a=N[e.s],b=N[e.t];ctx.strokeStyle=cRule;ctx.lineWidth=Math.min(e.w,4)*0.7;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()});
+  const mx=Math.max(...N.map(n=>n.w));
+  N.forEach(n=>{const r=4+10*Math.sqrt(n.w/mx);n.r=r;
+    ctx.fillStyle=cAcc;ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);ctx.fill();ctx.globalAlpha=1;
+    if(n.w>=Math.max(2,mx*0.33)){ctx.fillStyle=cInk;ctx.font='500 10.5px "IBM Plex Mono",monospace';
+      ctx.textAlign="center";ctx.fillText(n.id,n.x,n.y-r-4)}});
+}
+function netHit(ev){const cv=$("net"),b=cv.getBoundingClientRect(),x=ev.clientX-b.left,y=ev.clientY-b.top;
+  return (NET&&NET.nodes||[]).find(n=>Math.hypot(n.x-x,n.y-y)<=(n.r||6)+5)}
+
+function searchAuthor(name){
+  S.q=name;S.last=false;$("q").value=name;$("sc-last").checked=false;
+  setView("list");render();window.scrollTo({top:0,behavior:"smooth"});
+}
+function setView(v){
+  S.view=v;$("view-list").hidden=v!=="list";$("view-net").hidden=v!=="net";
+  $("tab-list").setAttribute("aria-selected",v==="list");$("tab-net").setAttribute("aria-selected",v==="net");
+  if(v==="net")requestAnimationFrame(drawNet);
+}
+
+/* ---------- events ---------- */
+let t;$("q").addEventListener("input",e=>{clearTimeout(t);t=setTimeout(()=>{S.q=e.target.value.trim();render()},130)});
+$("year").addEventListener("change",async e=>{
+  S.year=e.target.value;
+  if(S.year&&!S.loaded.has(+S.year)){await loadYear(+S.year);buildChips();buildAuthors();updateScopebar()}
+  render();
+});
+$("sort").addEventListener("change",e=>{S.sort=e.target.value;render()});
+$("sc-last").addEventListener("change",e=>{S.last=e.target.checked;S.rows.forEach(r=>delete r._h);render()});
+$("sc-and").addEventListener("change",e=>{S.and=e.target.checked;render()});
+$("sc-sum").addEventListener("change",e=>{S.onlySum=e.target.checked;render()});
+$("chips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(b)toggleTag(b.dataset.tag)});
+$("loadall").addEventListener("click",loadAllYears);
+$("list").addEventListener("click",e=>{
+  const tg=e.target.closest(".tag[data-tag]");if(tg){toggleTag(tg.dataset.tag);return}
+  const au=e.target.closest(".au");if(au){searchAuthor(au.dataset.au);return}
+});
+$("list").addEventListener("toggle",async e=>{
+  const d=e.target;if(!d.open||d.tagName!=="DETAILS")return;
+  const li=d.closest("li.rec"),p=d.querySelector("[data-abs]");
+  if(!p||p.dataset.done)return;
+  const m=await loadAbs(li.dataset.year);
+  p.innerHTML=m[li.dataset.pmid]?hl(m[li.dataset.pmid],terms(S.q)):"초록이 제공되지 않는 논문입니다.";
+  p.dataset.done="1";
+},true);
+$("authors").addEventListener("click",e=>{const b=e.target.closest("button[data-au]");if(b)searchAuthor(b.dataset.au)});
+$("reset").addEventListener("click",()=>{S.q="";S.year="";S.tags.clear();S.onlySum=false;
+  $("q").value="";$("year").value="";$("sc-sum").checked=false;
+  document.querySelectorAll('#chips .chip').forEach(b=>b.setAttribute("aria-pressed","false"));render()});
+$("tab-list").addEventListener("click",()=>setView("list"));
+$("tab-net").addEventListener("click",()=>setView("net"));
+$("net").addEventListener("click",e=>{const n=netHit(e);if(n)searchAuthor(n.id)});
+$("net").addEventListener("mousemove",e=>{$("net").style.cursor=netHit(e)?"pointer":"default"});
+addEventListener("resize",()=>{if(S.view==="net"){(NET&&NET.nodes||[]).forEach(n=>n.x=undefined);drawNet()}});
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{if(S.view==="net")drawNet()});
+
+/* ---------- boot ---------- */
+(async function(){
+  try{
+    S.manifest=await fetch("data/manifest.json").then(r=>r.json());
+    $("m-count").textContent=S.manifest.total;
+    $("m-gen").textContent=(S.manifest.generated_at||"").slice(0,10);
+    for(const y of S.manifest.years.slice(0,DEFAULT_YEARS).map(x=>x.year)) await loadYear(y);
+    buildChips();buildAuthors();render();updateScopebar();
+  }catch(err){
+    $("empty").hidden=false;
+    $("empty").innerHTML="<strong>데이터를 불러오지 못했습니다</strong>data/manifest.json 을 확인하십시오.";
+  }
+})();
+</script>
