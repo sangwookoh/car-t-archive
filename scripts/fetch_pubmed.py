@@ -106,8 +106,11 @@ QUERY = (
     'OR "AIR-Treg"[tiab] OR "AIR Treg"[tiab] OR "AIR Tregs"[tiab] '
     # Receptor architectures outside the CAR backbone:
     'OR "synNotch"[tiab] OR "synthetic Notch"[tiab] OR "SNIPR"[tiab] '
-    'OR "TRuC"[tiab] OR "TRuCs"[tiab] '
+    # Bare "TRuC" is left out: PubMed is case-insensitive, so it also matches
+    # French "truc" and unrelated strings. The spelled-out name is enough —
+    # TRuC papers always define it.
     'OR "T cell receptor fusion construct"[tiab] '
+    'OR "T cell receptor fusion constructs"[tiab] '
     'OR "T cell receptor fusion protein"[tiab] '
     'OR "chimeric engulfment receptor"[tiab] '
     'OR "antibody-coupled T cell receptor"[tiab] OR "ACTR T cells"[tiab] '
@@ -190,8 +193,23 @@ UNAMBIGUOUS = [
     # MeSH inverts the word order, and a record with no abstract may carry
     # nothing else. Without this, indexed papers get thrown away.
     r"Receptors, Chimeric Antigen", r"Immunotherapy, Adoptive",
-    r"\bCAR[-\s]?T\b", r"\bCAR[-\s]?NK\b", r"\bCAAR[-\s]?T\b",
+    # No trailing \b after T/NK: cell-line names run straight into digits
+    # ("CAR-NK92", "CAR-T19") and a word boundary never fires between K and 9.
+    r"\bCAR[-\s]?T\b", r"\bCAR[-\s]?T\d", r"\bCAR[-\s]?NK", r"\bCAAR[-\s]?T",
     r"CAR[-\s]macrophage", r"CAR[-\s]?Tregs?\b", r"CAR[-\s]?i?NKT\b",
+    # Pre-2015 papers often wrote "chimeric receptor" plus the cell type, and
+    # "CAR construct" is unambiguous in context.
+    r"chimeric receptor[^.]{0,40}(T cell|T lymphocyte|express)",
+    r"(T cell|T lymphocyte)[^.]{0,40}chimeric receptor",
+    r"\bCAR construct", r"\bCAR[-\s]transduc", r"\bCAR[-\s]express",
+    # Authors do scramble it ("chimeric receptor antigen (CAR) therapy"), and a
+    # parenthetical "(CAR)" next to receptor/therapy wording is unambiguous.
+    r"chimeric receptor antigen",
+    # A parenthetical "(CAR)" only counts next to therapy wording — in ruminant
+    # reproduction papers CAR is the caruncle, and "caruncular (CAR)" sits right
+    # beside words like "receptor" and "endometrium".
+    r"\(CARs?\)[^.]{0,30}(T cell|therap|immunotherap)",
+    r"(chimeric|engineered|CAR[-\s]?T)[^.]{0,30}\(CARs?\)",
     r"chimeric immunoreceptor", r"chimeric immune receptor",
     r"chimeric T[-\s]cell receptor", r"\bT-bod(y|ies)\b",
     r"B[-\s]cell antibody receptor", r"artificial immune receptor",
@@ -205,7 +223,7 @@ UNAMBIGUOUS = [
 EVIDENCE = [
     # receptor architecture
     r"\bscFv\b", r"single[-\s]chain variable", r"\bCD3\s?[ζz]\b", r"CD3[-\s]?zeta",
-    r"costimulatory domain", r"co[-\s]stimulatory domain", r"\b4-1BB\b", r"\bCD28\b",
+    r"co[-\s]?stimulatory", r"\b4-1BB\b", r"\bCD28\b", r"\bOX40\b", r"\bnanobody\b",
     r"hinge", r"transmembrane domain", r"ectodomain", r"signaling domain",
     r"binding domain", r"\bbinder\b",
     # gene delivery
@@ -222,6 +240,12 @@ EVIDENCE = [
 # Strong signals the match is something else entirely.
 EXCLUDE = [
     r"Barrett", r"oesophag|esophag", r"bile acid receptor", r"\bFXR\b", r"\bTGR5\b",
+    # CAR/ICAR also mean caruncular/intercaruncular endometrium in ruminant
+    # reproduction, and iCAR is a spatial-statistics model and a mountain-rescue
+    # body (ICAR-MEDCOM). None of these are cell therapy.
+    r"caruncul", r"\bewes?\b", r"intercaruncular",
+    r"conditional autoregressive", r"ICAR[-\s]MEDCOM", r"avalanche",
+    r"\bicaR?\b gene", r"ica operon", r"Staphylococcus",
     r"cell membrane[-\s]coat", r"membrane[-\s]coated nanoparticle",
     r"airway (inflammation|resistance|hyperrespons)", r"\bCAR[-\s]?M\b.{0,30}nano",
 ]
