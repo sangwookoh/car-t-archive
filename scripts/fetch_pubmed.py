@@ -147,7 +147,13 @@ def esearch(term, mindate=None, maxdate=None):
     print(f"  esearch: {total} records")
     if total == 0:
         return []
-    pmids, step = [], 10000
+    # NCBI caps retstart at 9,999 for esearch. Anything larger has to be split
+    # into narrower date windows by the caller.
+    if total > 9999:
+        raise RuntimeError(
+            f"esearch returned {total} records; NCBI only serves the first 9,999. "
+            "Split the query into smaller date windows.")
+    pmids, step = [], 9000
     for start in range(0, total, step):
         page = dict(term=term, WebEnv=meta["webenv"], query_key=meta["querykey"],
                     retstart=start, retmax=step, retmode="json")
@@ -400,7 +406,18 @@ def cmd_prune(args):
     valid PMID set from one esearch pass (cheap — no efetch) and drops
     anything outside it. Korean summaries are never touched.
     """
-    valid = set(esearch(QUERY))
+    # Year by year, because one esearch can only serve 9,999 records.
+    stored_years = sorted(
+        y for y in (load_json(p, {}).get("year") for p in DATA.glob("idx-*.json")) if y
+    )
+    if not stored_years:
+        print("nothing stored; nothing to prune")
+        return
+    lo, hi = stored_years[0] - 1, stored_years[-1] + 1
+    valid = set()
+    for year in range(lo, hi + 1):
+        print(f"--- esearch {year} ---")
+        valid |= set(esearch(QUERY, f"{year}/01/01", f"{year}/12/31"))
     print(f"valid PMIDs under current query: {len(valid)}")
     if len(valid) < 1000:
         print("refusing to prune: suspiciously small result set", file=sys.stderr)
