@@ -37,15 +37,21 @@ DELAY = 0.11 if API_KEY else 0.36          # stay under the NCBI rate limit
 TOOL = "cart-publication-archive"
 EMAIL = os.environ.get("NCBI_EMAIL", "").strip()
 
+# NOTE on precision: do NOT use "CAR-T"[All Fields]. PubMed tokenises the
+# hyphen, so any paper containing "car" and "t" matches — car-seat injury
+# studies, fMRI papers and the like. Anchor on the MeSH descriptor plus exact
+# Title/Abstract phrases instead.
 QUERY = (
-    '("chimeric antigen receptor"[All Fields] '
-    'OR "CAR-T"[All Fields] '
-    'OR "CAR T cell"[All Fields] '
-    'OR "CAR T cells"[All Fields] '
-    'OR "chimeric autoantibody receptor"[All Fields] '
-    'OR "CAAR-T"[All Fields] '
-    'OR "CAR-NK"[All Fields] '
-    'OR "CAR NK cell"[All Fields]) '
+    '("Receptors, Chimeric Antigen"[Mesh] '
+    'OR "chimeric antigen receptor"[tiab] '
+    'OR "chimeric antigen receptors"[tiab] '
+    'OR "chimeric autoantibody receptor"[tiab] '
+    'OR "chimeric autoantibody receptors"[tiab] '
+    'OR "CAR-T cell"[tiab] OR "CAR-T cells"[tiab] '
+    'OR "CAR T cell"[tiab] OR "CAR T cells"[tiab] '
+    'OR "CAR-NK cell"[tiab] OR "CAR-NK cells"[tiab] '
+    'OR "CAR NK cell"[tiab] OR "CAR NK cells"[tiab] '
+    'OR "CAAR-T"[tiab] OR "CAAR T cell"[tiab]) '
     'NOT (Editorial[pt] OR Comment[pt] OR Letter[pt] OR "Case Reports"[pt] '
     'OR Retracted Publication[pt])'
 )
@@ -59,7 +65,10 @@ CATEGORY_RULES = [
                     r"multiple sclerosis", r"myositis", r"scleroderma", r"arthritis",
                     r"NMOSD", r"neuromyelitis", r"type 1 diabetes"]),
     ("SLE",        [r"\bSLE\b", r"lupus erythematosus"]),
-    ("Myasthenia", [r"myasthenia", r"\bMuSK\b", r"acetylcholine receptor"]),
+    # "acetylcholine receptor" alone is not enough: fetal AChR is a CAR target
+    # in rhabdomyosarcoma, which has nothing to do with myasthenia gravis.
+    ("Myasthenia", [r"myasthenia", r"\bMuSK\b", r"\bAChR\b[^.]{0,60}myasthen",
+                    r"myasthen[^.]{0,60}\bAChR\b"]),
     ("Pemphigus",  [r"pemphigus", r"desmoglein", r"\bDsg[13]\b"]),
     ("NMOSD",      [r"neuromyelitis", r"NMOSD", r"aquaporin[-\s]?4", r"\bAQP4\b"]),
     ("Solid tumor",[r"solid tumou?r", r"glioblastoma", r"\bGBM\b", r"pancreatic cancer",
@@ -111,6 +120,12 @@ def classify(blob, rules):
     for name, pats in rules:
         if any(re.search(p, blob, re.I) for p in pats):
             out.append(name)
+    # A CAR-NK or CAAR-T paper says "chimeric antigen receptor" too, which
+    # would otherwise tag it CAR-T. Keep CAR-T only when the T-cell form is
+    # named explicitly.
+    if "CAR-T" in out and ("CAR-NK" in out or "CAAR-T" in out):
+        if not re.search(r"CAR[-\s]?T\b|chimeric antigen receptor[^.]{0,40}T cell", blob, re.I):
+            out.remove("CAR-T")
     return out
 
 
@@ -377,6 +392,49 @@ def cmd_weekly(args):
     run(esearch(QUERY, start.strftime("%Y/%m/%d"), end.strftime("%Y/%m/%d")), "weekly")
 
 
+def cmd_prune(args):
+    """Remove stored records that the current QUERY no longer matches.
+
+    Append-only keeps history stable, but it also preserves mistakes: records
+    collected under an earlier, looser query stay forever. This rebuilds the
+    valid PMID set from one esearch pass (cheap — no efetch) and drops
+    anything outside it. Korean summaries are never touched.
+    """
+    valid = set(esearch(QUERY))
+    print(f"valid PMIDs under current query: {len(valid)}")
+    if len(valid) < 1000:
+        print("refusing to prune: suspiciously small result set", file=sys.stderr)
+        sys.exit(1)
+
+    removed_total = 0
+    for ip in sorted(DATA.glob("idx-*.json")):
+        idx = load_json(ip, {"records": []})
+        keep = [r for r in idx["records"] if r["pmid"] in valid]
+        dropped = [r["pmid"] for r in idx["records"] if r["pmid"] not in valid]
+        if not dropped:
+            continue
+        year = idx.get("year")
+        for r in idx["records"]:
+            if r["pmid"] not in valid:
+                print(f"  drop {year} {r['pmid']}: {r['title'][:70]}")
+        idx["records"] = keep
+        idx["count"] = len(keep)
+        idx["updated_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if keep:
+            save_json(ip, idx)
+        else:
+            ip.unlink()
+        ap = shard_path("abs", year)
+        if ap.exists():
+            abs_ = load_json(ap, {})
+            for pmid in dropped:
+                abs_.pop(pmid, None)
+            save_json(ap, abs_) if abs_ else ap.unlink()
+        removed_total += len(dropped)
+    write_manifest()
+    print(f"pruned {removed_total} records")
+
+
 def cmd_backfill(args):
     for year in range(args.from_year, args.to_year + 1):
         print(f"--- {year} ---")
@@ -391,9 +449,10 @@ def main():
     b = sub.add_parser("backfill")
     b.add_argument("--from", dest="from_year", type=int, required=True)
     b.add_argument("--to", dest="to_year", type=int, required=True)
+    sub.add_parser("prune")
     args = ap.parse_args()
     DATA.mkdir(parents=True, exist_ok=True)
-    (cmd_weekly if args.cmd == "weekly" else cmd_backfill)(args)
+    {"weekly": cmd_weekly, "backfill": cmd_backfill, "prune": cmd_prune}[args.cmd](args)
 
 
 if __name__ == "__main__":
