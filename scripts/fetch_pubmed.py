@@ -271,62 +271,74 @@ def is_cell_gene_therapy(blob):
 # Deliberately finer than the broad category tags: the point is to be able to
 # ask "what is being tried in myasthenia gravis" and get an answer, which a
 # single "Autoimmune" bucket cannot give.
+# Three top-level groups, the way the CAR field actually talks about itself:
+# liquid tumours, solid tumours, and immunology & inflammation. The detailed
+# disease sits under one of them, so the matrix can open at group level and
+# drill down instead of showing 40 sparse rows at once.
+DISEASE_GROUP = {}
+
+
+def _grp(group, name):
+    DISEASE_GROUP[name] = group
+    return name
+
+
 DISEASE_RULES = [
     # --- haematologic malignancy ---
-    ("B-ALL",            [r"\bB[-\s]?ALL\b", r"B[-\s]cell acute lymphoblastic",
+    (_grp("Soft cancer", "B-ALL"),            [r"\bB[-\s]?ALL\b", r"B[-\s]cell acute lymphoblastic",
                           r"acute lymphoblastic leukemi|leukaemi"]),
-    ("T-ALL",            [r"\bT[-\s]?ALL\b", r"T[-\s]cell acute lymphoblastic"]),
-    ("AML",              [r"\bAML\b", r"acute myeloid leukemi|leukaemi"]),
-    ("CLL",              [r"\bCLL\b", r"chronic lymphocytic leukemi|leukaemi"]),
-    ("DLBCL/NHL",        [r"\bDLBCL\b", r"diffuse large B[-\s]cell lymphoma",
+    (_grp("Soft cancer", "T-ALL"),            [r"\bT[-\s]?ALL\b", r"T[-\s]cell acute lymphoblastic"]),
+    (_grp("Soft cancer", "AML"),              [r"\bAML\b", r"acute myeloid leukemi|leukaemi"]),
+    (_grp("Soft cancer", "CLL"),              [r"\bCLL\b", r"chronic lymphocytic leukemi|leukaemi"]),
+    (_grp("Soft cancer", "DLBCL/NHL"),        [r"\bDLBCL\b", r"diffuse large B[-\s]cell lymphoma",
                           r"non[-\s]Hodgkin", r"follicular lymphoma",
                           r"mantle cell lymphoma", r"\bMCL\b"]),
-    ("Hodgkin lymphoma", [r"Hodgkin lymphoma", r"Hodgkin's disease"]),
-    ("Multiple myeloma", [r"multiple myeloma", r"\bMM\b(?![-\s]?\d)", r"plasma cell myeloma"]),
-    ("T-cell lymphoma",  [r"T[-\s]cell lymphoma", r"cutaneous T[-\s]cell",
+    (_grp("Soft cancer", "Hodgkin lymphoma"), [r"Hodgkin lymphoma", r"Hodgkin's disease"]),
+    (_grp("Soft cancer", "Multiple myeloma"), [r"multiple myeloma", r"\bMM\b(?![-\s]?\d)", r"plasma cell myeloma"]),
+    (_grp("Soft cancer", "T-cell lymphoma"),  [r"T[-\s]cell lymphoma", r"cutaneous T[-\s]cell",
                           r"peripheral T[-\s]cell lymphoma"]),
     # --- solid tumour ---
-    ("Glioma/GBM",       [r"glioblastoma", r"\bGBM\b", r"glioma", r"\bDIPG\b",
+    (_grp("Solid cancer", "Glioma/GBM"),       [r"glioblastoma", r"\bGBM\b", r"glioma", r"\bDIPG\b",
                           r"diffuse midline glioma"]),
-    ("Neuroblastoma",    [r"neuroblastoma"]),
-    ("Sarcoma",          [r"sarcoma", r"osteosarcoma", r"Ewing"]),
-    ("Lung cancer",      [r"lung cancer", r"\bNSCLC\b", r"\bSCLC\b",
+    (_grp("Solid cancer", "Neuroblastoma"),    [r"neuroblastoma"]),
+    (_grp("Solid cancer", "Sarcoma"),          [r"sarcoma", r"osteosarcoma", r"Ewing"]),
+    (_grp("Solid cancer", "Lung cancer"),      [r"lung cancer", r"\bNSCLC\b", r"\bSCLC\b",
                           r"lung adenocarcinoma"]),
-    ("Breast cancer",    [r"breast cancer", r"breast carcinoma", r"\bTNBC\b"]),
-    ("Pancreatic cancer",[r"pancreatic cancer", r"pancreatic ductal adenocarcinoma", r"\bPDAC\b"]),
-    ("Liver cancer",     [r"hepatocellular carcinoma", r"\bHCC\b", r"liver cancer"]),
-    ("Gastric/CRC",      [r"gastric cancer", r"colorectal cancer", r"\bCRC\b",
+    (_grp("Solid cancer", "Breast cancer"),    [r"breast cancer", r"breast carcinoma", r"\bTNBC\b"]),
+    (_grp("Solid cancer", "Pancreatic cancer"),[r"pancreatic cancer", r"pancreatic ductal adenocarcinoma", r"\bPDAC\b"]),
+    (_grp("Solid cancer", "Liver cancer"),     [r"hepatocellular carcinoma", r"\bHCC\b", r"liver cancer"]),
+    (_grp("Solid cancer", "Gastric/CRC"),      [r"gastric cancer", r"colorectal cancer", r"\bCRC\b",
                           r"colon cancer", r"gastroesophageal"]),
-    ("Ovarian cancer",   [r"ovarian cancer", r"ovarian carcinoma"]),
-    ("Prostate cancer",  [r"prostate cancer", r"prostate carcinoma"]),
-    ("Renal cancer",     [r"renal cell carcinoma", r"\bRCC\b", r"kidney cancer"]),
-    ("Melanoma",         [r"melanoma"]),
-    ("Mesothelioma",     [r"mesothelioma"]),
-    ("Head and neck",    [r"head and neck (squamous|cancer|carcinoma)", r"\bHNSCC\b"]),
+    (_grp("Solid cancer", "Ovarian cancer"),   [r"ovarian cancer", r"ovarian carcinoma"]),
+    (_grp("Solid cancer", "Prostate cancer"),  [r"prostate cancer", r"prostate carcinoma"]),
+    (_grp("Solid cancer", "Renal cancer"),     [r"renal cell carcinoma", r"\bRCC\b", r"kidney cancer"]),
+    (_grp("Solid cancer", "Melanoma"),         [r"melanoma"]),
+    (_grp("Solid cancer", "Mesothelioma"),     [r"mesothelioma"]),
+    (_grp("Solid cancer", "Head and neck"),    [r"head and neck (squamous|cancer|carcinoma)", r"\bHNSCC\b"]),
     # --- autoimmune / immune-mediated ---
-    ("SLE",              [r"\bSLE\b", r"systemic lupus erythematosus", r"lupus nephritis"]),
-    ("Myasthenia gravis",[r"myasthenia gravis", r"\bgMG\b",
+    (_grp("I&I", "SLE"),              [r"\bSLE\b", r"systemic lupus erythematosus", r"lupus nephritis"]),
+    (_grp("I&I", "Myasthenia gravis"),[r"myasthenia gravis", r"\bgMG\b",
                           r"\bMuSK\b[^.]{0,60}myasthen", r"myasthen[^.]{0,60}\bMuSK\b"]),
-    ("Pemphigus",        [r"pemphigus", r"\bDsg[13]\b", r"desmoglein"]),
-    ("NMOSD",            [r"neuromyelitis optica", r"\bNMOSD?\b", r"aquaporin[-\s]?4", r"\bAQP4\b"]),
-    ("Multiple sclerosis",[r"multiple sclerosis", r"\bMS\b(?=[^.]{0,40}(patient|disease|treat))"]),
-    ("Rheumatoid arthritis",[r"rheumatoid arthritis", r"\bRA\b(?=[^.]{0,40}patient)"]),
-    ("Systemic sclerosis",[r"systemic sclerosis", r"scleroderma", r"\bSSc\b"]),
-    ("Myositis",         [r"myositis", r"dermatomyositis", r"\bIIM\b"]),
-    ("Type 1 diabetes",  [r"type 1 diabetes", r"\bT1D\b", r"autoimmune diabetes"]),
-    ("IBD",              [r"inflammatory bowel disease", r"Crohn", r"ulcerative colitis"]),
-    ("Sjogren",          [r"Sj[öo]gren"]),
-    ("ANCA vasculitis",  [r"\bANCA\b", r"vasculitis"]),
-    ("ITP/AIHA",         [r"immune thrombocytopeni", r"\bITP\b",
+    (_grp("I&I", "Pemphigus"),        [r"pemphigus", r"\bDsg[13]\b", r"desmoglein"]),
+    (_grp("I&I", "NMOSD"),            [r"neuromyelitis optica", r"\bNMOSD?\b", r"aquaporin[-\s]?4", r"\bAQP4\b"]),
+    (_grp("I&I", "Multiple sclerosis"),[r"multiple sclerosis", r"\bMS\b(?=[^.]{0,40}(patient|disease|treat))"]),
+    (_grp("I&I", "Rheumatoid arthritis"),[r"rheumatoid arthritis", r"\bRA\b(?=[^.]{0,40}patient)"]),
+    (_grp("I&I", "Systemic sclerosis"),[r"systemic sclerosis", r"scleroderma", r"\bSSc\b"]),
+    (_grp("I&I", "Myositis"),         [r"myositis", r"dermatomyositis", r"\bIIM\b"]),
+    (_grp("I&I", "Type 1 diabetes"),  [r"type 1 diabetes", r"\bT1D\b", r"autoimmune diabetes"]),
+    (_grp("I&I", "IBD"),              [r"inflammatory bowel disease", r"Crohn", r"ulcerative colitis"]),
+    (_grp("I&I", "Sjogren"),          [r"Sj[öo]gren"]),
+    (_grp("I&I", "ANCA vasculitis"),  [r"\bANCA\b", r"vasculitis"]),
+    (_grp("I&I", "ITP/AIHA"),         [r"immune thrombocytopeni", r"\bITP\b",
                           r"autoimmune hemolytic|haemolytic anemia|anaemia"]),
-    ("Hemophilia inhibitor",[r"h(a)?emophilia", r"\bFVIII\b", r"factor VIII inhibitor"]),
+    (_grp("I&I", "Hemophilia inhibitor"),[r"h(a)?emophilia", r"\bFVIII\b", r"factor VIII inhibitor"]),
     # --- transplantation and other ---
-    ("GvHD/transplant",  [r"graft[-\s]versus[-\s]host", r"\bGvHD\b",
+    (_grp("I&I", "GvHD/transplant"),  [r"graft[-\s]versus[-\s]host", r"\bGvHD\b",
                           r"transplant rejection", r"allograft tolerance"]),
-    ("Infection",        [r"\bHIV\b", r"hepatitis B virus", r"\bHBV\b",
+    (_grp("Other", "Infection"),        [r"\bHIV\b", r"hepatitis B virus", r"\bHBV\b",
                           r"fungal infection", r"\bCMV\b"]),
-    ("Fibrosis",         [r"cardiac fibrosis", r"\bFAP\b[^.]{0,40}fibro", r"liver fibrosis"]),
-    ("Senescence",       [r"senescen", r"senolytic", r"\buPAR\b"]),
+    (_grp("Other", "Fibrosis"),         [r"cardiac fibrosis", r"\bFAP\b[^.]{0,40}fibro", r"liver fibrosis"]),
+    (_grp("Other", "Senescence"),       [r"senescen", r"senolytic", r"\buPAR\b"]),
 ]
 
 # --------------------------------------------------------------- target axis
@@ -343,7 +355,32 @@ TARGET_RULES = [
     ("CD40",       [r"\bCD40\b(?![Ll])"]),
 ]
 
-REVIEW_TYPES = {"Review", "Systematic Review", "Meta-Analysis"}
+REVIEW_TYPES = {"Review", "Systematic Review", "Meta-Analysis",
+                "Scoping Review", "Narrative Review", "Guideline",
+                "Practice Guideline", "Consensus Development Conference"}
+def classify_pub_type(ptypes, title, abstract):
+    """Review / Clinical / Original.
+
+    This matters more than it looks: a single review can name a dozen diseases
+    and would otherwise dominate every cell of the disease matrix. PubMed's own
+    publication types miss plenty of reviews, so the title and the abstract's
+    opening are checked too.
+    """
+    s = set(ptypes)
+    if s & REVIEW_TYPES:
+        return "Review"
+    head = f"{title} {abstract[:320]}"
+    if re.search(r"\b(review|overview|perspective|state of the art|"
+                 r"current (status|landscape|advances|progress)|"
+                 r"recent (advances|progress|developments)|"
+                 r"we (review|summarize|discuss)|this review|"
+                 r"here,? we (review|summarize)|systematic search)\b", head, re.I):
+        return "Review"
+    if s & TRIAL_TYPES:
+        return "Clinical"
+    return "Original"
+
+
 TRIAL_TYPES = {"Clinical Trial", "Randomized Controlled Trial", "Clinical Trial, Phase I",
                "Clinical Trial, Phase II", "Clinical Trial, Phase III", "Observational Study"}
 
@@ -546,12 +583,7 @@ def parse_article(art):
     if not ok:
         return {"_rejected": True, "pmid": pmid, "title": title, "reason": why}
 
-    if set(ptypes) & REVIEW_TYPES:
-        pub_type = "Review"
-    elif set(ptypes) & TRIAL_TYPES:
-        pub_type = "Clinical"
-    else:
-        pub_type = "Original"
+    pub_type = classify_pub_type(ptypes, title, abstract)
 
     return {
         "pmid": pmid,
@@ -574,6 +606,7 @@ def parse_article(art):
         "mesh": mesh,
         "category": classify(blob, CATEGORY_RULES),
         "disease": classify(blob, DISEASE_RULES),
+        "dgroup": sorted({DISEASE_GROUP[d] for d in classify(blob, DISEASE_RULES)}),
         "target": classify(blob, TARGET_RULES),
         "pub_type": pub_type,
         "article_types": ptypes,
@@ -662,6 +695,7 @@ def slim(rec):
         "journal": rec["journal"],
         "year": rec["year"], "date": rec["date"], "week": rec["week"],
         "category": rec["category"], "disease": rec.get("disease", []),
+        "dgroup": rec.get("dgroup", []),
         "target": rec.get("target", []), "pub_type": rec["pub_type"],
         "keywords": rec["keywords"][:12], "mesh": rec["mesh"][:14],
     }
@@ -827,6 +861,8 @@ def cmd_retag(args):
             new = {
                 "category": classify(blob, CATEGORY_RULES),
                 "disease": classify(blob, DISEASE_RULES),
+                "dgroup": sorted({DISEASE_GROUP[d]
+                                  for d in classify(blob, DISEASE_RULES)}),
                 "target": classify(blob, TARGET_RULES),
             }
             if any(new[k] != r.get(k) for k in new):
