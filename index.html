@@ -47,9 +47,10 @@ nav.views button:focus-visible{outline:2px solid var(--accent);outline-offset:-2
 .field input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
 .field svg{position:absolute;left:12px;width:15px;height:15px;stroke:var(--ink-faint);fill:none;stroke-width:2;pointer-events:none}
 select{padding:11px 10px;font:inherit;font-size:13.5px;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:3px;min-width:0}
-.scopes{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink-soft)}
+.scopes{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink-soft);align-items:center}
 .scopes label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .scopes input{accent-color:var(--accent)}
+.scopelbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
 .chip{appearance:none;font:inherit;font-size:12.5px;cursor:pointer;padding:4px 11px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-soft)}
 .chip .n{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-left:5px;font-variant-numeric:tabular-nums}
@@ -70,7 +71,9 @@ li.rec:first-child{border-top:1px solid var(--rule)}
 .rec h2 a{color:var(--ink);text-decoration:none;background-image:linear-gradient(var(--rule),var(--rule));background-size:100% 1px;background-position:0 100%;background-repeat:no-repeat}
 .rec h2 a:hover{background-image:linear-gradient(var(--accent),var(--accent))}
 .byline{font-size:13.5px;color:var(--ink-soft);line-height:1.55}
-.byline .last{color:var(--ink);font-weight:600}
+.byline .first{color:var(--ink);font-weight:600}
+.byline .corr{color:var(--accent-ink);font-weight:600}
+.byline .rolemk{font-size:9px;margin-left:1px;opacity:.75;font-weight:400}
 .byline .au{cursor:pointer;border-bottom:1px dotted var(--rule)}
 .byline .au:hover{color:var(--accent-ink);border-bottom-color:var(--accent)}
 .src{font-family:var(--font-mono);font-size:12px;color:var(--ink-faint);margin-top:6px;font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;gap:4px 12px}
@@ -163,9 +166,16 @@ footer code{font-family:var(--font-mono);font-size:11px}
         </select>
       </div>
       <div class="scopes">
-        <label><input type="checkbox" id="sc-last"> 교신저자(마지막 저자)만 매칭</label>
+        <span class="scopelbl">저자 검색 범위</span>
+        <label><input type="radio" name="arole" id="ar-any" checked> 전체 저자</label>
+        <label><input type="radio" name="arole" id="ar-first"> 제1저자</label>
+        <label><input type="radio" name="arole" id="ar-corr"> 교신저자</label>
+        <label><input type="radio" name="arole" id="ar-senior"> 마지막 저자</label>
+      </div>
+      <div class="scopes">
         <label><input type="checkbox" id="sc-and"> 선택 태그 모두 만족(AND)</label>
         <label><input type="checkbox" id="sc-sum"> 한국어 요약 있는 것만</label>
+        <label><input type="checkbox" id="sc-confirm"> 교신저자가 확인된 논문만</label>
       </div>
       <div class="chips" id="chips"></div>
     </div>
@@ -210,8 +220,12 @@ footer code{font-family:var(--font-mono);font-size:11px}
       <div class="netnote"><span id="netstat">—</span><span>노드 클릭 시 해당 저자 검색</span></div>
     </div>
     <h3 class="secttl">교신저자 색인</h3>
-    <p>마지막 저자 기준 집계입니다. 분야의 주요 그룹이 데이터에서 그대로 드러납니다.</p>
+    <p>소속란 이메일로 식별한 교신저자 집계입니다. 한 논문에 여러 명이면 모두 집계되고, 이메일이 없는 논문은 마지막 저자로 대체합니다. 분야의 주요 그룹이 데이터에서 그대로 드러납니다.</p>
     <div class="authorlist" id="authors"></div>
+
+    <h3 class="secttl">제1저자 색인</h3>
+    <p>공동 제1저자가 표기된 논문은 전원 집계합니다. 실무를 주도하는 연구자층이 보입니다.</p>
+    <div class="authorlist" id="authors-first"></div>
   </section>
 
   <footer>
@@ -222,8 +236,8 @@ footer code{font-family:var(--font-mono);font-size:11px}
 
 <script>
 const S={rows:[],abs:{},sum:{},loaded:new Set(),manifest:null,
-  tags:new Set(),q:"",year:"",sort:"date",last:false,and:false,onlySum:false,view:"list",
-  axis:"platform",dFilter:"",xFilter:""};
+  tags:new Set(),q:"",year:"",sort:"date",arole:"any",and:false,onlySum:false,
+  onlyConfirmed:false,view:"list",axis:"platform",dFilter:"",xFilter:""};
 const PLATFORMS=["CAR-T","CAAR-T","CAR-NK","CAR-M","CAR-Treg","CAR-NKT","CAR-γδT",
                  "BAR","AIR","synNotch","TRuC/TFP","CER"];
 const $=id=>document.getElementById(id);
@@ -235,8 +249,17 @@ function hl(text,ts){let o=esc(text);if(!ts.length)return o;
   for(const t of ts){const r=new RegExp("("+t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig");o=o.replace(r,"<mark>$1</mark>")}
   return o}
 
+// Older records predate the authorship fields; fall back so they stay findable
+// instead of silently dropping out of a role-scoped search.
+const firstsOf=r=>(r.first_authors&&r.first_authors.length)?r.first_authors
+                  :(r.first_author?[r.first_author]:[]);
+const corrsOf =r=>(r.corresponding&&r.corresponding.length)?r.corresponding
+                  :(r.last_author?[r.last_author]:[]);
+
 function hay(r){
-  if(S.last) return (r.last_author||"").toLowerCase();
+  if(S.arole==="first")  return firstsOf(r).join(" ").toLowerCase();
+  if(S.arole==="corr")   return corrsOf(r).join(" ").toLowerCase();
+  if(S.arole==="senior") return (r.last_author||"").toLowerCase();
   if(!r._h) r._h=[r.title,r.journal,(r.authors||[]).join(" "),(r.keywords||[]).join(" "),
     (r.mesh||[]).join(" "),(r.category||[]).join(" "),r.pmid,r.doi].join(" ").toLowerCase();
   return r._h;
@@ -247,6 +270,7 @@ function filtered(){
   return S.rows.filter(r=>{
     if(S.year && String(r.year)!==S.year) return false;
     if(S.onlySum && !S.sum[r.pmid]) return false;
+    if(S.onlyConfirmed && r.corr_source!=="email") return false;
     if(S.dFilter && !(r.disease||[]).includes(S.dFilter)) return false;
     if(S.xFilter){
       const pool = S.axis==="platform" ? (r.category||[]) : (r.target||[]);
@@ -269,22 +293,35 @@ function filtered(){
 
 function byline(r,ts){
   const a=r.authors||[];if(!a.length)return "";
-  const show=a.length>9?[...a.slice(0,6),"\u2026",...a.slice(-2)]:a;
-  return show.map(n=>{
-    if(n==="\u2026")return '<span style="color:var(--ink-faint)"> \u2026 </span>';
-    const isLast=n===a[a.length-1]&&a.length>1;
-    return '<span class="au'+(isLast?' last':'')+'" data-au="'+esc(n)+'">'+hl(n,ts)+'</span>';
-  }).join(", ");
+  const firsts=new Set(firstsOf(r)), corrs=new Set(corrsOf(r));
+  // Always show the role-bearing authors, however long the list.
+  const keep=new Set([...a.slice(0,3),...firsts,...corrs,a[a.length-1]]);
+  const show=a.length>10?a.filter((n,i)=>keep.has(n)||i<3):a;
+  const out=[];let gap=false;
+  a.forEach(n=>{
+    if(!show.includes(n)){gap=true;return}
+    if(gap){out.push('<span style="color:var(--ink-faint)"> \u2026 </span>');gap=false}
+    const cls=["au"];
+    if(firsts.has(n)) cls.push("first");
+    if(corrs.has(n)) cls.push("corr");
+    const mark=(corrs.has(n)&&r.corr_source==="email")?'<sup class="rolemk" title="\uad50\uc2e0\uc800\uc790">\u2709</sup>'
+              :(firsts.has(n)&&firsts.size>1)?'<sup class="rolemk" title="\uacf5\ub3d9 \uc81c1\uc800\uc790">*</sup>':'';
+    out.push('<span class="'+cls.join(" ")+'" data-au="'+esc(n)+'">'+hl(n,ts)+mark+'</span>');
+  });
+  return out.join(", ");
 }
 
 function render(){
   const rows=filtered(),ts=terms(S.q),MAX=400;
   $("n").textContent=rows.length;$("ntot").textContent=S.rows.length;
-  $("reset").hidden=!(S.q||S.year||S.tags.size||S.onlySum||S.dFilter||S.xFilter);
+  $("reset").hidden=!(S.q||S.year||S.tags.size||S.onlySum||S.dFilter||S.xFilter
+                      ||S.onlyConfirmed||S.arole!=="any");
   const bits=[];
   if(S.dFilter) bits.push(S.dFilter);
   if(S.xFilter) bits.push(S.xFilter);
-  if(S.last&&S.q) bits.push("교신저자 매칭");
+  if(S.q&&S.arole!=="any") bits.push(
+    {first:"제1저자",corr:"교신저자",senior:"마지막 저자"}[S.arole]+" 매칭");
+  if(S.onlyConfirmed) bits.push("교신저자 확인됨");
   $("activefilter").textContent=bits.length?" · "+bits.join(" × "):"";
   $("empty").hidden=rows.length>0;
   $("list").innerHTML=rows.slice(0,MAX).map(r=>{
@@ -415,16 +452,19 @@ function drillDown(d,x){
 /* ---------- author index + network ---------- */
 let NET=null;
 function buildAuthors(){
-  const last={},all={},pairs={};
+  const last={},first={},all={},pairs={};
   S.rows.forEach(r=>{
-    if(r.last_author) last[r.last_author]=(last[r.last_author]||0)+1;
+    corrsOf(r).forEach(n=>last[n]=(last[n]||0)+1);
+    firstsOf(r).forEach(n=>first[n]=(first[n]||0)+1);
     const a=[...new Set(r.authors||[])];
     a.forEach(n=>all[n]=(all[n]||0)+1);
     for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
       const k=[a[i],a[j]].sort().join("\u0000");pairs[k]=(pairs[k]||0)+1;}
   });
-  $("authors").innerHTML=Object.entries(last).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,24)
+  const tbl=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,24)
     .map(([n,c])=>'<button data-au="'+esc(n)+'"><span class="nm">'+esc(n)+'</span><span class="ct">'+c+'</span></button>').join("");
+  $("authors").innerHTML=tbl(last);
+  $("authors-first").innerHTML=tbl(first);
   const top=Object.entries(all).sort((a,b)=>b[1]-a[1]).slice(0,45).map(([n,c])=>({id:n,w:c}));
   const idx=new Map(top.map((d,i)=>[d.id,i])),edges=[];
   Object.entries(pairs).forEach(([k,w])=>{const [x,y]=k.split("\u0000");
@@ -465,7 +505,7 @@ function netHit(ev){const cv=$("net"),b=cv.getBoundingClientRect(),x=ev.clientX-
   return (NET&&NET.nodes||[]).find(n=>Math.hypot(n.x-x,n.y-y)<=(n.r||6)+5)}
 
 function searchAuthor(name){
-  S.q=name;S.last=false;$("q").value=name;$("sc-last").checked=false;
+  S.q=name;S.arole="any";$("q").value=name;$("ar-any").checked=true;
   setView("list");render();window.scrollTo({top:0,behavior:"smooth"});
 }
 function setView(v){
@@ -485,9 +525,11 @@ $("year").addEventListener("change",async e=>{
   render();
 });
 $("sort").addEventListener("change",e=>{S.sort=e.target.value;render()});
-$("sc-last").addEventListener("change",e=>{S.last=e.target.checked;S.rows.forEach(r=>delete r._h);render()});
+for(const [id,v] of [["ar-any","any"],["ar-first","first"],["ar-corr","corr"],["ar-senior","senior"]])
+  $(id).addEventListener("change",()=>{S.arole=v;render()});
 $("sc-and").addEventListener("change",e=>{S.and=e.target.checked;render()});
 $("sc-sum").addEventListener("change",e=>{S.onlySum=e.target.checked;render()});
+$("sc-confirm").addEventListener("change",e=>{S.onlyConfirmed=e.target.checked;render()});
 $("chips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(b)toggleTag(b.dataset.tag)});
 $("loadall").addEventListener("click",loadAllYears);
 $("list").addEventListener("click",e=>{
@@ -518,10 +560,12 @@ $("list").addEventListener("toggle",async e=>{
   p.innerHTML=m[li.dataset.pmid]?hl(m[li.dataset.pmid],terms(S.q)):"초록이 제공되지 않는 논문입니다.";
   p.dataset.done="1";
 },true);
-$("authors").addEventListener("click",e=>{const b=e.target.closest("button[data-au]");if(b)searchAuthor(b.dataset.au)});
+for(const id of ["authors","authors-first"])
+  $(id).addEventListener("click",e=>{const b=e.target.closest("button[data-au]");if(b)searchAuthor(b.dataset.au)});
 $("reset").addEventListener("click",()=>{S.q="";S.year="";S.tags.clear();S.onlySum=false;
-  S.dFilter="";S.xFilter="";
+  S.dFilter="";S.xFilter="";S.onlyConfirmed=false;S.arole="any";
   $("q").value="";$("year").value="";$("sc-sum").checked=false;
+  $("sc-confirm").checked=false;$("ar-any").checked=true;
   document.querySelectorAll('#chips .chip').forEach(b=>b.setAttribute("aria-pressed","false"));render()});
 $("tab-list").addEventListener("click",()=>setView("list"));
 $("tab-net").addEventListener("click",()=>setView("net"));
