@@ -453,8 +453,16 @@ def parse_article(art):
         parts.append(f"{label}: {body}" if label else body)
     abstract = " ".join(p for p in parts if p)
 
-    authors, full = [], []
-    for au in a.findall("./AuthorList/Author") if a is not None else []:
+    # Authorship roles. PubMed marks neither "first" nor "corresponding"
+    # directly, so two indirect signals are used:
+    #   corresponding -> an e-mail address in the author's affiliation
+    #                    (present for ~48% of papers; 22% have more than one)
+    #   co-first      -> EqualContrib="Y" on a run starting at position 0
+    #                    (present for ~21%; the same attribute also marks
+    #                    co-senior authors, hence the "starting at 0" rule)
+    authors, full, corr_idx, eq_idx = [], [], [], []
+    au_nodes = a.findall("./AuthorList/Author") if a is not None else []
+    for i, au in enumerate(au_nodes):
         last = text_of(au.find("LastName"))
         if not last:
             coll = text_of(au.find("CollectiveName"))
@@ -466,6 +474,31 @@ def parse_article(art):
         fore = text_of(au.find("ForeName"))
         authors.append(f"{last} {ini}".strip())
         full.append(f"{fore} {last}".strip())
+        affs_txt = " ".join(text_of(x) for x in au.findall("AffiliationInfo/Affiliation"))
+        if re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", affs_txt):
+            corr_idx.append(len(authors) - 1)
+        if au.get("EqualContrib") == "Y":
+            eq_idx.append(len(authors) - 1)
+
+    # Co-first authors: the contiguous equal-contribution run that includes the
+    # opening position. A run elsewhere means co-senior, which is not this.
+    first_authors = authors[:1]
+    if 0 in eq_idx:
+        run, k = [], 0
+        while k in eq_idx:
+            run.append(authors[k])
+            k += 1
+        first_authors = run or first_authors
+
+    corresponding = [authors[i] for i in corr_idx]
+    corr_source = "email"
+    if not corresponding and len(authors) > 1:
+        # No e-mail anywhere: fall back to the last author, flagged as a guess
+        # so the UI can say so rather than implying the journal stated it.
+        corresponding = [authors[-1]]
+        corr_source = "inferred"
+    elif not corresponding:
+        corr_source = "none"
 
     j = a.find("Journal") if a is not None else None
     journal = text_of(j.find("ISOAbbreviation")) if j is not None else ""
@@ -529,6 +562,9 @@ def parse_article(art):
         "authors_full": full,
         "first_author": authors[0] if authors else None,
         "last_author": authors[-1] if len(authors) > 1 else None,
+        "first_authors": first_authors,
+        "corresponding": corresponding,
+        "corr_source": corr_source,
         "journal": journal or journal_full,
         "journal_full": journal_full or journal,
         "year": int(y) if y.isdigit() else None,
@@ -604,7 +640,11 @@ def slim(rec):
     return {
         "pmid": rec["pmid"], "doi": rec["doi"], "title": rec["title"],
         "authors": rec["authors"], "first_author": rec["first_author"],
-        "last_author": rec["last_author"], "journal": rec["journal"],
+        "last_author": rec["last_author"],
+        "first_authors": rec.get("first_authors") or [],
+        "corresponding": rec.get("corresponding") or [],
+        "corr_source": rec.get("corr_source", "none"),
+        "journal": rec["journal"],
         "year": rec["year"], "date": rec["date"], "week": rec["week"],
         "category": rec["category"], "disease": rec.get("disease", []),
         "target": rec.get("target", []), "pub_type": rec["pub_type"],
@@ -787,6 +827,66 @@ def cmd_retag(args):
     print(f"retagged {changed_records} records across {changed_files} years")
 
 
+def cmd_refresh_authors(args):
+    """Re-fetch stored records to fill in authorship roles.
+
+    Corresponding and co-first authors are derived from affiliations, which the
+    archive never stored, so they cannot be recomputed offline the way tags
+    can. This re-reads the PubMed records and writes back ONLY the authorship
+    fields, leaving titles, dates, tags and Korean summaries untouched.
+    Records that already carry the fields are skipped, so it is resumable.
+    """
+    todo = {}
+    for ip in sorted(DATA.glob("idx-*.json")):
+        idx = load_json(ip, {"records": []})
+        for r in idx["records"]:
+            if args.force or "corr_source" not in r:
+                todo[r["pmid"]] = idx.get("year")
+    print(f"records needing authorship: {len(todo)}")
+    if not todo:
+        return
+
+    roles = {}
+    pmids = list(todo)
+    for i in range(0, len(pmids), 200):
+        chunk = pmids[i:i + 200]
+        xml = _get(_url("efetch.fcgi", id=",".join(chunk), retmode="xml"))
+        try:
+            root = ET.fromstring(xml)
+        except ET.ParseError as exc:
+            print(f"  ! parse error at {i}: {exc}", file=sys.stderr)
+            continue
+        for art in root.findall("PubmedArticle"):
+            rec = parse_article(art)
+            if not rec or rec.get("_rejected"):
+                continue
+            roles[rec["pmid"]] = {
+                "first_authors": rec.get("first_authors") or [],
+                "corresponding": rec.get("corresponding") or [],
+                "corr_source": rec.get("corr_source", "none"),
+            }
+        print(f"  fetched {min(i + 200, len(pmids))}/{len(pmids)}")
+        time.sleep(DELAY)
+
+    updated = 0
+    for ip in sorted(DATA.glob("idx-*.json")):
+        idx = load_json(ip, {"records": []})
+        dirty = False
+        for r in idx["records"]:
+            got = roles.get(r["pmid"])
+            if not got:
+                continue
+            r.update(got)
+            dirty = True
+            updated += 1
+        if dirty:
+            idx["updated_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            save_json(ip, idx)
+            print(f"  {idx.get('year')}: updated")
+    write_manifest()
+    print(f"authorship filled for {updated} records")
+
+
 def cmd_audit(args):
     """Dry run of the cell/gene-therapy gate over stored records.
 
@@ -837,10 +937,14 @@ def main():
     sub.add_parser("prune")
     sub.add_parser("retag")
     sub.add_parser("audit")
+    ra = sub.add_parser("refresh-authors")
+    ra.add_argument("--force", action="store_true",
+                    help="redo records that already have authorship fields")
     args = ap.parse_args()
     DATA.mkdir(parents=True, exist_ok=True)
     {"weekly": cmd_weekly, "backfill": cmd_backfill, "prune": cmd_prune,
-     "retag": cmd_retag, "audit": cmd_audit}[args.cmd](args)
+     "retag": cmd_retag, "audit": cmd_audit,
+     "refresh-authors": cmd_refresh_authors}[args.cmd](args)
 
 
 if __name__ == "__main__":
