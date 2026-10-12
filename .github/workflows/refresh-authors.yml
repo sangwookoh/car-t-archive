@@ -1,0 +1,50 @@
+name: Refresh authorship
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "이미 채워진 레코드도 다시 수집 (true/false)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pubmed-archive
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh
+        env:
+          NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+          NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            python scripts/fetch_pubmed.py refresh-authors --force
+          else
+            python scripts/fetch_pubmed.py refresh-authors
+          fi
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -z "$(git status --porcelain data/)" ]; then
+            echo "Nothing to update."
+            exit 0
+          fi
+          git add data/
+          git commit -m "data: fill first/corresponding author fields"
+          git push
