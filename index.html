@@ -224,14 +224,63 @@ footer code{font-family:var(--font-mono);font-size:11px}
   </header>
 
   <nav class="views" role="tablist">
-    <button role="tab" id="tab-list" aria-selected="true" aria-controls="view-list">논문 목록</button>
+    <button role="tab" id="tab-week" aria-selected="true" aria-controls="view-week">주간 하이라이트</button>
     <button role="tab" id="tab-trend" aria-selected="false" aria-controls="view-trend">분야 동향</button>
-    <button role="tab" id="tab-week" aria-selected="false" aria-controls="view-week">주간 하이라이트</button>
+    <button role="tab" id="tab-list" aria-selected="false" aria-controls="view-list">논문 목록</button>
     <button role="tab" id="tab-matrix" aria-selected="false" aria-controls="view-matrix">질병별 전략</button>
     <button role="tab" id="tab-net" aria-selected="false" aria-controls="view-net">저자 관계도</button>
   </nav>
 
-  <section id="view-list" role="tabpanel" aria-labelledby="tab-list">
+  <section id="view-week" role="tabpanel" aria-labelledby="tab-week">
+    <div class="wkhead">
+      <button class="wknav" id="wk-prev" aria-label="이전 주">‹</button>
+      <select id="wk-sel" aria-label="주차"></select>
+      <button class="wknav" id="wk-next" aria-label="다음 주">›</button>
+      <span class="wkrange" id="wk-range">—</span>
+    </div>
+
+    <div class="stats" id="wk-stats"></div>
+
+    <h3 class="secttl">주목할 논문</h3>
+    <p>저널의 영향력, 임상 연구 여부, 한국어 요약 유무를 함께 고려해 상위 논문을 추렸습니다.</p>
+    <ol class="results" id="wk-top"></ol>
+
+    <h3 class="secttl">이번 주 분포</h3>
+    <div class="wkdist" id="wk-dist"></div>
+
+    <h3 class="secttl">전체 목록</h3>
+    <p id="wk-allnote">이 주차의 논문을 모두 보려면 목록 화면에서 기간이 적용된 상태로 확인하십시오.</p>
+    <button class="linkish" id="wk-open">이 주차를 목록에서 열기</button>
+  </section>
+
+  <section id="view-trend" role="tabpanel" aria-labelledby="tab-trend" hidden>
+    <div class="stats" id="tr-stats"></div>
+
+    <section class="fig">
+      <h3 class="secttl">치료 영역의 이동</h3>
+      <p id="tr-lede">—</p>
+      <div class="chartbox" id="tr-share"></div>
+    </section>
+
+    <section class="fig">
+      <h3 class="secttl">플랫폼별 확산</h3>
+      <p>효과세포 계열마다 규모가 크게 달라, 각 패널은 자체 축으로 그렸습니다. 세로 눈금은 패널 간 비교용이 아닙니다.</p>
+      <div class="sparks" id="tr-plat"></div>
+    </section>
+
+    <section class="fig">
+      <h3 class="secttl">우리 연구와의 접점</h3>
+      <p id="tr-niche-lede">—</p>
+      <div class="chartbox" id="tr-niche"></div>
+      <h4 class="subttl">최근 접점 논문</h4>
+      <ol class="results compact" id="tr-nichelist"></ol>
+      <button class="linkish" id="tr-nicheall">접점 논문 전체 보기</button>
+    </section>
+
+    <p class="fignote" id="tr-note"></p>
+  </section>
+
+  <section id="view-list" role="tabpanel" aria-labelledby="tab-list" hidden>
     <div class="controls">
       <div class="searchline">
         <div class="modesw" role="group" aria-label="검색 모드">
@@ -297,55 +346,6 @@ footer code{font-family:var(--font-mono);font-size:11px}
       <strong>결과가 없습니다</strong>
       검색어를 줄이거나 태그 선택을 해제해 보세요. 과거 연도는 위의 전체 불러오기가 필요할 수 있습니다.
     </div>
-  </section>
-
-  <section id="view-trend" role="tabpanel" aria-labelledby="tab-trend" hidden>
-    <div class="stats" id="tr-stats"></div>
-
-    <section class="fig">
-      <h3 class="secttl">치료 영역의 이동</h3>
-      <p id="tr-lede">—</p>
-      <div class="chartbox" id="tr-share"></div>
-    </section>
-
-    <section class="fig">
-      <h3 class="secttl">플랫폼별 확산</h3>
-      <p>효과세포 계열마다 규모가 크게 달라, 각 패널은 자체 축으로 그렸습니다. 세로 눈금은 패널 간 비교용이 아닙니다.</p>
-      <div class="sparks" id="tr-plat"></div>
-    </section>
-
-    <section class="fig">
-      <h3 class="secttl">우리 연구와의 접점</h3>
-      <p id="tr-niche-lede">—</p>
-      <div class="chartbox" id="tr-niche"></div>
-      <h4 class="subttl">최근 접점 논문</h4>
-      <ol class="results compact" id="tr-nichelist"></ol>
-      <button class="linkish" id="tr-nicheall">접점 논문 전체 보기</button>
-    </section>
-
-    <p class="fignote" id="tr-note"></p>
-  </section>
-
-  <section id="view-week" role="tabpanel" aria-labelledby="tab-week" hidden>
-    <div class="wkhead">
-      <button class="wknav" id="wk-prev" aria-label="이전 주">‹</button>
-      <select id="wk-sel" aria-label="주차"></select>
-      <button class="wknav" id="wk-next" aria-label="다음 주">›</button>
-      <span class="wkrange" id="wk-range">—</span>
-    </div>
-
-    <div class="stats" id="wk-stats"></div>
-
-    <h3 class="secttl">주목할 논문</h3>
-    <p>저널의 영향력, 임상 연구 여부, 한국어 요약 유무를 함께 고려해 상위 논문을 추렸습니다.</p>
-    <ol class="results" id="wk-top"></ol>
-
-    <h3 class="secttl">이번 주 분포</h3>
-    <div class="wkdist" id="wk-dist"></div>
-
-    <h3 class="secttl">전체 목록</h3>
-    <p id="wk-allnote">이 주차의 논문을 모두 보려면 목록 화면에서 기간이 적용된 상태로 확인하십시오.</p>
-    <button class="linkish" id="wk-open">이 주차를 목록에서 열기</button>
   </section>
 
   <section id="view-matrix" role="tabpanel" aria-labelledby="tab-matrix" hidden>
@@ -1321,6 +1321,8 @@ matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{if(S.vi
     $("m-gen").textContent=(S.manifest.generated_at||"").slice(0,10);
     for(const y of S.manifest.years.slice(0,DEFAULT_YEARS).map(x=>x.year)) await loadYear(y);
     setMode("kw");buildChips();buildAuthors();render();updateScopebar();
+    // The weekly digest is what people come back for, so it opens first.
+    setView("week");renderWeek();
   }catch(err){
     $("empty").hidden=false;
     $("empty").innerHTML="<strong>데이터를 불러오지 못했습니다</strong>"+
