@@ -50,7 +50,15 @@ select{padding:11px 10px;font:inherit;font-size:13.5px;background:var(--surface)
 .scopes{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink-soft);align-items:center}
 .scopes label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .scopes input{accent-color:var(--accent)}
-.scopelbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint)}
+.scopelbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint);min-width:62px}
+.modesw{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden;flex:0 0 auto}
+.modesw button{appearance:none;border:0;background:var(--surface);color:var(--ink-soft);font:inherit;font-size:13px;padding:0 14px;cursor:pointer;white-space:nowrap}
+.modesw button+button{border-left:1px solid var(--rule)}
+.modesw button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:500}
+.modesw button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.qhint{margin:7px 0 0;font-size:12px;color:var(--ink-faint);font-family:var(--font-mono);min-height:1.3em}
+.qhint.bad{color:var(--amber)}
+.qhint code{background:var(--rule-soft);padding:1px 4px;border-radius:2px;font-size:11px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
 .chip{appearance:none;font:inherit;font-size:12.5px;cursor:pointer;padding:4px 11px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-soft)}
 .chip .n{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-left:5px;font-variant-numeric:tabular-nums}
@@ -84,7 +92,13 @@ li.rec:first-child{border-top:1px solid var(--rule)}
 .tag{font-size:11px;font-family:var(--font-mono);letter-spacing:.03em;padding:2px 8px;border-radius:2px;background:var(--accent-soft);color:var(--accent-ink);cursor:pointer;border:0}
 .tag.t-type{background:transparent;color:var(--ink-faint);border:1px solid var(--rule);cursor:default}
 .tag.t-sum{background:var(--amber-soft);color:var(--amber);border:0;cursor:default}
+.tag.t-grp{background:var(--ink);color:var(--paper);font-weight:500}
 .tag.t-dis{background:transparent;color:var(--ink-soft);border:1px solid var(--accent);border-style:dashed}
+.mxchk{display:inline-flex;gap:5px;align-items:center;font-size:12.5px;color:var(--ink-soft);cursor:pointer}
+.mxchk input{accent-color:var(--accent)}
+table.mx th.rowh .grow{appearance:none;border:0;background:none;font:inherit;font-size:13px;
+  color:var(--accent-ink);cursor:pointer;padding:0;font-weight:600}
+table.mx th.rowh .grow:hover{text-decoration:underline}
 .tag.t-tgt{background:var(--rule-soft);color:var(--ink-soft)}
 .ko{margin-top:11px;padding:11px 14px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 3px 3px 0}
 .ko .lbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:5px}
@@ -153,9 +167,13 @@ footer code{font-family:var(--font-mono);font-size:11px}
   <section id="view-list" role="tabpanel" aria-labelledby="tab-list">
     <div class="controls">
       <div class="searchline">
+        <div class="modesw" role="group" aria-label="검색 모드">
+          <button id="m-kw" aria-pressed="true">키워드</button>
+          <button id="m-name" aria-pressed="false">저자명</button>
+        </div>
         <div class="field">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
-          <input id="q" type="search" placeholder="제목·저자·저널·키워드·MeSH 검색  (예: CAAR, Carl June, June CH, pemphigus)" autocomplete="off">
+          <input id="q" type="search" autocomplete="off">
         </div>
         <select id="year" aria-label="연도"><option value="">불러온 연도 전체</option></select>
         <select id="sort" aria-label="정렬">
@@ -165,12 +183,19 @@ footer code{font-family:var(--font-mono);font-size:11px}
           <option value="last">교신저자</option>
         </select>
       </div>
-      <div class="scopes">
-        <span class="scopelbl">저자 검색 범위</span>
-        <label><input type="radio" name="arole" id="ar-any" checked> 전체 저자</label>
+      <p class="qhint" id="qhint"></p>
+      <div class="scopes" id="rolerow">
+        <span class="scopelbl">저자 역할</span>
+        <label><input type="radio" name="arole" id="ar-any" checked> 전체</label>
         <label><input type="radio" name="arole" id="ar-first"> 제1저자</label>
         <label><input type="radio" name="arole" id="ar-corr"> 교신저자</label>
         <label><input type="radio" name="arole" id="ar-senior"> 마지막 저자</label>
+      </div>
+      <div class="scopes">
+        <span class="scopelbl">논문 유형</span>
+        <label><input type="checkbox" id="pt-orig" checked> 원저</label>
+        <label><input type="checkbox" id="pt-clin" checked> 임상</label>
+        <label><input type="checkbox" id="pt-rev" checked> 리뷰</label>
       </div>
       <div class="scopes">
         <label><input type="checkbox" id="sc-and"> 선택 태그 모두 만족(AND)</label>
@@ -199,12 +224,26 @@ footer code{font-family:var(--font-mono);font-size:11px}
 
   <section id="view-matrix" role="tabpanel" aria-labelledby="tab-matrix" hidden>
     <h3 class="secttl">질병 × 전략 교차표</h3>
-    <p>각 질병에서 어떤 플랫폼과 표적이 쓰이는지 보여줍니다. 숫자는 논문 수이고, 칸을 누르면 해당 논문 목록으로 이동합니다.</p>
+    <p>각 질병에서 어떤 플랫폼과 표적이 쓰이는지 보여줍니다. 질병군을 누르면 세부 질병으로 내려가고, 칸을 누르면 해당 논문 목록으로 이동합니다. 리뷰는 한 편이 여러 질병을 거론해 분포를 왜곡하므로 기본 집계에서 제외합니다.</p>
 
     <div class="mxbar">
       <span>열 기준</span>
       <button class="chip" id="ax-platform" aria-pressed="true">플랫폼</button>
       <button class="chip" id="ax-target" aria-pressed="false">표적 항원</button>
+    </div>
+    <div class="mxbar">
+      <span>행 기준</span>
+      <button class="chip" id="gr-all" aria-pressed="true">질병군</button>
+      <button class="chip gbtn" data-g="Soft cancer" aria-pressed="false">Soft cancer</button>
+      <button class="chip gbtn" data-g="Solid cancer" aria-pressed="false">Solid cancer</button>
+      <button class="chip gbtn" data-g="I&amp;I" aria-pressed="false">I&amp;I</button>
+      <button class="chip gbtn" data-g="Other" aria-pressed="false">Other</button>
+    </div>
+    <div class="mxbar">
+      <span>집계 대상</span>
+      <label class="mxchk"><input type="checkbox" id="mt-orig" checked> 원저</label>
+      <label class="mxchk"><input type="checkbox" id="mt-clin" checked> 임상</label>
+      <label class="mxchk"><input type="checkbox" id="mt-rev"> 리뷰</label>
       <span class="mxnote" id="mxscope">—</span>
     </div>
 
@@ -237,16 +276,84 @@ footer code{font-family:var(--font-mono);font-size:11px}
 <script>
 const S={rows:[],abs:{},sum:{},loaded:new Set(),manifest:null,
   tags:new Set(),q:"",year:"",sort:"date",arole:"any",and:false,onlySum:false,
-  onlyConfirmed:false,view:"list",axis:"platform",dFilter:"",xFilter:""};
+  onlyConfirmed:false,view:"list",axis:"platform",dFilter:"",xFilter:"",gFilter:"",
+  mode:"kw",pt:{orig:true,clin:true,rev:true},mxGroup:null,
+  mxTypes:{orig:true,clin:true,rev:false}};
+const DGROUPS=["Soft cancer","Solid cancer","I&I","Other"];
+// Which group each disease belongs to, learned from the data so the page never
+// has to keep a second copy of the taxonomy in sync with the collector.
+const DGROUP_OF={};
 const PLATFORMS=["CAR-T","CAAR-T","CAR-NK","CAR-M","CAR-Treg","CAR-NKT","CAR-γδT",
                  "BAR","AIR","synNotch","TRuC/TFP","CER"];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const DEFAULT_YEARS=2;
 
-function terms(q){return q.toLowerCase().split(/\s+/).filter(t=>t.length>1)}
-function hl(text,ts){let o=esc(text);if(!ts.length)return o;
-  for(const t of ts){const r=new RegExp("("+t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig");o=o.replace(r,"<mark>$1</mark>")}
+/* ---------- query language ----------
+   AND / OR / NOT, parentheses, "quoted phrases", and a leading - to exclude.
+   Space means AND. Parses to a tree evaluated against a match function, so
+   keyword mode and name mode share one engine and differ only in how a single
+   term is tested. */
+function tokenize(q){
+  const out=[];const re=/\s*(\(|\)|"[^"]*"|[^\s()]+)/g;let m;
+  while((m=re.exec(q))!==null) out.push(m[1]);
+  return out;
+}
+function parseQuery(q){
+  const tk=tokenize(q);let i=0;
+  const peek=()=>tk[i];
+  const isOp=t=>t&&/^(AND|OR|NOT)$/i.test(t);
+  function parseOr(){
+    let l=parseAnd();
+    while(peek()&&/^OR$/i.test(peek())){i++;const r=parseAnd();l={op:"or",l,r}}
+    return l;
+  }
+  function parseAnd(){
+    let l=parseUnary();
+    while(peek()&&peek()!==")"){
+      if(/^OR$/i.test(peek())) break;
+      if(/^AND$/i.test(peek())) i++;
+      if(!peek()||peek()===")"||/^OR$/i.test(peek())) break;
+      const r=parseUnary(); if(!r) break; l={op:"and",l,r};
+    }
+    return l;
+  }
+  function parseUnary(){
+    let t=peek();
+    if(!t) return null;
+    if(/^NOT$/i.test(t)){i++;const v=parseUnary();return v?{op:"not",v}:null}
+    if(t.startsWith("-")&&t.length>1){i++;return {op:"not",v:{op:"term",t:t.slice(1).replace(/^"|"$/g,"")}}}
+    if(t==="("){i++;const v=parseOr();if(peek()===")")i++;return v}
+    if(t===")") return null;
+    if(isOp(t)){i++;return parseUnary()}
+    i++;
+    const phrase=t.startsWith('"');
+    return {op:"term",t:t.replace(/^"|"$/g,""),phrase};
+  }
+  const tree=parseOr();
+  return {tree,empty:!tree};
+}
+function evalQuery(node,test){
+  if(!node) return true;
+  switch(node.op){
+    case "and": return evalQuery(node.l,test)&&evalQuery(node.r,test);
+    case "or":  return evalQuery(node.l,test)||evalQuery(node.r,test);
+    case "not": return !evalQuery(node.v,test);
+    default:    return test(node.t,node.phrase);
+  }
+}
+function queryTerms(node,acc){
+  acc=acc||[];
+  if(!node) return acc;
+  if(node.op==="term"){acc.push(node.t);return acc}
+  if(node.op==="not") return acc;              // don't highlight exclusions
+  queryTerms(node.l,acc);queryTerms(node.r,acc);
+  return acc;
+}
+
+function hl(text,ts){let o=esc(text);if(!ts||!ts.length)return o;
+  for(const t of ts){if(!t)continue;
+    const r=new RegExp("("+t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig");o=o.replace(r,"<mark>$1</mark>")}
   return o}
 
 // Older records predate the authorship fields; fall back so they stay findable
@@ -256,34 +363,69 @@ const firstsOf=r=>(r.first_authors&&r.first_authors.length)?r.first_authors
 const corrsOf =r=>(r.corresponding&&r.corresponding.length)?r.corresponding
                   :(r.last_author?[r.last_author]:[]);
 
-// "June CH" and "Carl H" are stored apart; a search for "carl june" splits into
-// terms that must all appear, so joining the two forms is enough to match it,
-// and "Carl H June" never has to be stored.
-function nameBlob(r,names){
-  const a=r.authors||[],fo=r.fore||[];
-  return names.map(n=>{const i=a.indexOf(n);return i>=0&&fo[i]?n+" "+fo[i]:n})
-              .join(" ").toLowerCase();
-}
 const fullName=(r,n)=>{const i=(r.authors||[]).indexOf(n),f=(r.fore||[])[i];
   return f?f+" "+(n.includes(" ")?n.slice(0,n.lastIndexOf(" ")):n):n};
 
-function hay(r){
-  if(S.arole==="first")  return nameBlob(r,firstsOf(r));
-  if(S.arole==="corr")   return nameBlob(r,corrsOf(r));
-  if(S.arole==="senior") return nameBlob(r,r.last_author?[r.last_author]:[]);
+// Name mode works on tokens, not substrings: "Oh" must match the surname Oh
+// and never the "oh" inside Pooh. Each author becomes a token set built from
+// the surname, the initials (split apart, so "CH" also answers "C" and "H")
+// and the given names.
+function nameTokens(r,names){
+  const a=r.authors||[],fo=r.fore||[],sets=[];
+  names.forEach(n=>{
+    const i=a.indexOf(n);
+    const sp=n.lastIndexOf(" ");
+    const surname=sp>0?n.slice(0,sp):n;
+    const inits=sp>0?n.slice(sp+1):"";
+    const t=new Set();
+    t.add(surname.toLowerCase());
+    surname.toLowerCase().split(/[-\s']/).forEach(x=>x&&t.add(x));
+    inits.toLowerCase().split("").forEach(c=>/[a-z]/.test(c)&&t.add(c));
+    if(i>=0&&fo[i]) fo[i].toLowerCase().split(/[-\s.]/).forEach(x=>x&&t.add(x));
+    sets.push(t);
+  });
+  return sets;
+}
+function namesInScope(r){
+  if(S.arole==="first")  return firstsOf(r);
+  if(S.arole==="corr")   return corrsOf(r);
+  if(S.arole==="senior") return r.last_author?[r.last_author]:[];
+  return r.authors||[];
+}
+// A multi-word term ("sangwook oh") must land on ONE author, not be spread
+// across two different people in the list.
+function nameTest(r){
+  const sets=nameTokens(r,namesInScope(r));
+  return (term)=>{
+    const want=term.toLowerCase().split(/[\s.,]+/).filter(Boolean);
+    if(!want.length) return true;
+    return sets.some(s=>want.every(w=>s.has(w)));
+  };
+}
+
+function kwHay(r){
   if(!r._h) r._h=[r.title,r.journal,(r.authors||[]).join(" "),(r.fore||[]).join(" "),
     (r.keywords||[]).join(" "),(r.mesh||[]).join(" "),(r.category||[]).join(" "),
     (r.disease||[]).join(" "),(r.target||[]).join(" "),r.pmid,r.doi]
     .join(" ").toLowerCase();
   return r._h;
 }
+const kwTest=r=>{const h=kwHay(r);return t=>h.includes(t.toLowerCase())};
+
+function typeOK(r){
+  const t=r.pub_type||"Original";
+  return (t==="Review"&&S.pt.rev)||(t==="Clinical"&&S.pt.clin)||
+         (t!=="Review"&&t!=="Clinical"&&S.pt.orig);
+}
 
 function filtered(){
-  const ts=terms(S.q);
+  const parsed=S.q.trim()?parseQuery(S.q):{tree:null,empty:true};
   return S.rows.filter(r=>{
+    if(!typeOK(r)) return false;
     if(S.year && String(r.year)!==S.year) return false;
     if(S.onlySum && !S.sum[r.pmid]) return false;
     if(S.onlyConfirmed && r.corr_source!=="email") return false;
+    if(S.gFilter && !(r.dgroup||[]).includes(S.gFilter)) return false;
     if(S.dFilter && !(r.disease||[]).includes(S.dFilter)) return false;
     if(S.xFilter){
       const pool = S.axis==="platform" ? (r.category||[]) : (r.target||[]);
@@ -294,7 +436,10 @@ function filtered(){
       const ok=S.and?[...S.tags].every(t=>c.includes(t)):[...S.tags].some(t=>c.includes(t));
       if(!ok) return false;
     }
-    if(ts.length){const h=hay(r);if(!ts.every(t=>h.includes(t))) return false}
+    if(!parsed.empty){
+      const test=S.mode==="name"?nameTest(r):kwTest(r);
+      if(!evalQuery(parsed.tree,test)) return false;
+    }
     return true;
   }).sort((a,b)=>{
     if(S.sort==="date") return (b.date||"").localeCompare(a.date||"");
@@ -329,20 +474,27 @@ function byline(r,ts){
 }
 
 function render(){
-  const rows=filtered(),ts=terms(S.q),MAX=400;
+  const rows=filtered(),MAX=400;
+  const parsed=S.q.trim()?parseQuery(S.q):{tree:null,empty:true};
+  const ts=parsed.empty?[]:queryTerms(parsed.tree);
   $("n").textContent=rows.length;$("ntot").textContent=S.rows.length;
+  const anyType=!(S.pt.orig&&S.pt.clin&&S.pt.rev);
   $("reset").hidden=!(S.q||S.year||S.tags.size||S.onlySum||S.dFilter||S.xFilter
-                      ||S.onlyConfirmed||S.arole!=="any");
+                      ||S.gFilter||S.onlyConfirmed||S.arole!=="any"||anyType);
   const bits=[];
+  if(S.gFilter) bits.push(S.gFilter);
   if(S.dFilter) bits.push(S.dFilter);
   if(S.xFilter) bits.push(S.xFilter);
-  if(S.q&&S.arole!=="any") bits.push(
-    {first:"제1저자",corr:"교신저자",senior:"마지막 저자"}[S.arole]+" 매칭");
+  if(S.q&&S.mode==="name"&&S.arole!=="any") bits.push(
+    {first:"제1저자",corr:"교신저자",senior:"마지막 저자"}[S.arole]);
   if(S.onlyConfirmed) bits.push("교신저자 확인됨");
+  if(anyType) bits.push([S.pt.orig&&"원저",S.pt.clin&&"임상",S.pt.rev&&"리뷰"]
+    .filter(Boolean).join("+")||"없음");
   $("activefilter").textContent=bits.length?" · "+bits.join(" × "):"";
   $("empty").hidden=rows.length>0;
   $("list").innerHTML=rows.slice(0,MAX).map(r=>{
     const cats=(r.category||[]).map(c=>'<button class="tag" data-tag="'+esc(c)+'">'+esc(c)+'</button>').join("")
+      +(r.dgroup||[]).map(g=>'<button class="tag t-grp" data-grp="'+esc(g)+'">'+esc(g)+'</button>').join("")
       +(r.disease||[]).map(d=>'<button class="tag t-dis" data-dis="'+esc(d)+'">'+esc(d)+'</button>').join("")
       +(r.target||[]).map(x=>'<button class="tag t-tgt" data-tgt="'+esc(x)+'">'+esc(x)+'</button>').join("");
     const ko=S.sum[r.pmid];
@@ -371,6 +523,11 @@ async function loadYear(y){
     fetch("data/idx-"+y+".json").then(r=>r.ok?r.json():{records:[]}).catch(()=>({records:[]})),
     fetch("data/sum-"+y+".json").then(r=>r.ok?r.json():{}).catch(()=>({}))
   ]);
+  (idx.records||[]).forEach(r=>{
+    // A record with exactly one group pins its diseases to that group.
+    if((r.dgroup||[]).length===1)
+      (r.disease||[]).forEach(d=>{if(!DGROUP_OF[d]) DGROUP_OF[d]=r.dgroup[0]});
+  });
   S.rows=S.rows.concat(idx.records||[]);
   Object.assign(S.sum,sum);
 }
@@ -410,14 +567,28 @@ function toggleTag(t){S.tags.has(t)?S.tags.delete(t):S.tags.add(t);
   render()}
 
 /* ---------- disease x strategy matrix ---------- */
+function mxTypeOK(r){
+  const t=r.pub_type||"Original";
+  return (t==="Review"&&S.mxTypes.rev)||(t==="Clinical"&&S.mxTypes.clin)||
+         (t!=="Review"&&t!=="Clinical"&&S.mxTypes.orig);
+}
+
 function buildMatrix(){
-  const cols = S.axis==="platform" ? PLATFORMS : null;
+  // Rows are the three top-level groups until one is opened, then the
+  // diseases inside it. Forty sparse rows at once told nobody anything.
+  const drill=!!S.mxGroup;
   const colCount={}, rowCount={}, cell={};
+  let counted=0;
   S.rows.forEach(r=>{
-    const ds=r.disease||[]; if(!ds.length) return;
+    if(!mxTypeOK(r)) return;
+    const ds=drill ? (r.disease||[]).filter(d=>(r.dgroup||[]).includes(S.mxGroup)
+                                               && DGROUP_OF[d]===S.mxGroup)
+                   : (r.dgroup||[]);
+    if(!ds.length) return;
     const xs=(S.axis==="platform" ? (r.category||[]).filter(c=>PLATFORMS.includes(c))
                                   : (r.target||[]));
     if(!xs.length) return;
+    counted++;
     ds.forEach(d=>{
       rowCount[d]=(rowCount[d]||0)+1;
       xs.forEach(x=>{
@@ -426,29 +597,35 @@ function buildMatrix(){
       });
     });
   });
-  const rows=Object.entries(rowCount).sort((a,b)=>b[1]-a[1]).slice(0,26).map(e=>e[0]);
-  const colList=(cols||Object.keys(colCount)).filter(c=>colCount[c])
-    .sort((a,b)=>colCount[b]-colCount[a]).slice(0,S.axis==="platform"?12:18);
+  const rows=drill?Object.entries(rowCount).sort((a,b)=>b[1]-a[1]).slice(0,26).map(e=>e[0])
+                  :DGROUPS.filter(g=>rowCount[g]);
+  const colList=(S.axis==="platform"?PLATFORMS:Object.keys(colCount))
+    .filter(c=>colCount[c]).sort((a,b)=>colCount[b]-colCount[a])
+    .slice(0,S.axis==="platform"?12:18);
   const max=Math.max(1,...Object.values(cell));
 
   if(!rows.length){ $("mx").innerHTML=""; $("mxempty").hidden=false; return; }
   $("mxempty").hidden=true;
 
-  let html='<thead><tr><th class="rowh corner">질병</th>'+
-    colList.map(c=>'<th>'+esc(c)+'</th>').join("")+'</tr></thead><tbody>';
+  let html='<thead><tr><th class="rowh corner">'+(drill?esc(S.mxGroup):"질병군")+
+    '</th>'+colList.map(c=>'<th>'+esc(c)+'</th>').join("")+'</tr></thead><tbody>';
   rows.forEach(d=>{
-    html+='<tr><th class="rowh">'+esc(d)+'<span class="tot">'+rowCount[d]+'</span></th>';
+    const lbl=drill?esc(d)
+      :'<button class="grow" data-open="'+esc(d)+'">'+esc(d)+' ▸</button>';
+    html+='<tr><th class="rowh">'+lbl+'<span class="tot">'+rowCount[d]+'</span></th>';
     colList.forEach(c=>{
       const n=cell[d+"\u0000"+c]||0;
       if(!n){ html+='<td class="zero"><span>·</span></td>'; return; }
-      const a=(0.10+0.62*Math.sqrt(n/max)).toFixed(3);
-      html+='<td style="background:color-mix(in srgb, var(--accent) '+(a*100).toFixed(1)+'%, transparent)">'+
-        '<button data-d="'+esc(d)+'" data-x="'+esc(c)+'" title="'+esc(d)+' × '+esc(c)+': '+n+'건">'+n+'</button></td>';
+      const a=(0.10+0.62*Math.sqrt(n/max))*100;
+      html+='<td style="background:color-mix(in srgb, var(--accent) '+a.toFixed(1)+'%, transparent)">'+
+        '<button data-d="'+esc(d)+'" data-x="'+esc(c)+'" data-lvl="'+(drill?"d":"g")+
+        '" title="'+esc(d)+' × '+esc(c)+': '+n+'건">'+n+'</button></td>';
     });
     html+='</tr>';
   });
   $("mx").innerHTML=html+'</tbody>';
-  $("mxscope").textContent=S.rows.length.toLocaleString()+"건 기준";
+  const names=[S.mxTypes.orig&&"원저",S.mxTypes.clin&&"임상",S.mxTypes.rev&&"리뷰"].filter(Boolean);
+  $("mxscope").textContent=names.join("+")+" "+counted.toLocaleString()+"건 집계";
 }
 
 async function openMatrix(){
@@ -459,11 +636,23 @@ async function openMatrix(){
   }
   buildMatrix();
 }
-function drillDown(d,x){
-  S.dFilter=d; S.xFilter=x; S.q=""; S.tags.clear(); S.year=""; S.onlySum=false;
+function drillDown(d,x,lvl){
+  if(lvl==="g"){S.gFilter=d;S.dFilter=""}else{S.dFilter=d;S.gFilter=""}
+  S.xFilter=x; S.q=""; S.tags.clear(); S.year=""; S.onlySum=false;
+  // The matrix excludes reviews by default; carry that choice into the list so
+  // the count the user clicked is the count they land on.
+  S.pt={orig:S.mxTypes.orig,clin:S.mxTypes.clin,rev:S.mxTypes.rev};
+  $("pt-orig").checked=S.pt.orig;$("pt-clin").checked=S.pt.clin;$("pt-rev").checked=S.pt.rev;
   $("q").value=""; $("year").value=""; $("sc-sum").checked=false;
   document.querySelectorAll('#chips .chip').forEach(b=>b.setAttribute("aria-pressed","false"));
   setView("list"); render(); window.scrollTo({top:0,behavior:"smooth"});
+}
+function setGroup(g){
+  S.mxGroup=g;
+  $("gr-all").setAttribute("aria-pressed",String(!g));
+  document.querySelectorAll(".gbtn").forEach(b=>
+    b.setAttribute("aria-pressed",String(b.dataset.g===g)));
+  buildMatrix();
 }
 
 /* ---------- author index + network ---------- */
@@ -526,6 +715,7 @@ function netHit(ev){const cv=$("net"),b=cv.getBoundingClientRect(),x=ev.clientX-
 
 function searchAuthor(name){
   S.q=name;S.arole="any";$("q").value=name;$("ar-any").checked=true;
+  setMode("name");
   setView("list");render();window.scrollTo({top:0,behavior:"smooth"});
 }
 function setView(v){
@@ -538,7 +728,8 @@ function setView(v){
 }
 
 /* ---------- events ---------- */
-let t;$("q").addEventListener("input",e=>{clearTimeout(t);t=setTimeout(()=>{S.q=e.target.value.trim();render()},130)});
+let t;$("q").addEventListener("input",e=>{clearTimeout(t);
+  t=setTimeout(()=>{S.q=e.target.value.trim();updateHint();render()},130)});
 $("year").addEventListener("change",async e=>{
   S.year=e.target.value;
   if(S.year&&!S.loaded.has(+S.year)){await loadYear(+S.year);buildChips();buildAuthors();updateScopebar()}
@@ -547,6 +738,39 @@ $("year").addEventListener("change",async e=>{
 $("sort").addEventListener("change",e=>{S.sort=e.target.value;render()});
 for(const [id,v] of [["ar-any","any"],["ar-first","first"],["ar-corr","corr"],["ar-senior","senior"]])
   $(id).addEventListener("change",()=>{S.arole=v;render()});
+for(const [id,k] of [["pt-orig","orig"],["pt-clin","clin"],["pt-rev","rev"]])
+  $(id).addEventListener("change",e=>{S.pt[k]=e.target.checked;render()});
+function setMode(m){
+  S.mode=m;
+  $("m-kw").setAttribute("aria-pressed",String(m==="kw"));
+  $("m-name").setAttribute("aria-pressed",String(m==="name"));
+  $("rolerow").style.opacity=m==="name"?"1":".45";
+  $("q").placeholder=m==="name"
+    ? '저자명 검색 — 정확히 일치  (예: Sangwook Oh, Oh S, June OR Mackensen)'
+    : '제목·초록 키워드·저널·MeSH 검색  (예: CAAR AND pemphigus, "in vivo" -lymphoma)';
+  updateHint(); render();
+}
+function updateHint(){
+  const el=$("qhint");
+  if(!S.q.trim()){
+    el.className="qhint";
+    el.innerHTML=S.mode==="name"
+      ? '성·이름·이니셜을 토큰 단위로 정확히 비교합니다. <code>Oh</code>는 Pooh에 걸리지 않습니다.'
+      : 'AND · OR · NOT · 괄호 · "구문" · -제외 사용 가능. 공백은 AND입니다.';
+    return;
+  }
+  const p=parseQuery(S.q);
+  el.className="qhint";
+  el.innerHTML="해석: <code>"+esc(describe(p.tree))+"</code>";
+}
+function describe(n){
+  if(!n) return "(없음)";
+  if(n.op==="term") return n.phrase?'"'+n.t+'"':n.t;
+  if(n.op==="not")  return "NOT "+describe(n.v);
+  return "("+describe(n.l)+" "+n.op.toUpperCase()+" "+describe(n.r)+")";
+}
+$("m-kw").addEventListener("click",()=>setMode("kw"));
+$("m-name").addEventListener("click",()=>setMode("name"));
 $("sc-and").addEventListener("change",e=>{S.and=e.target.checked;render()});
 $("sc-sum").addEventListener("change",e=>{S.onlySum=e.target.checked;render()});
 $("sc-confirm").addEventListener("change",e=>{S.onlyConfirmed=e.target.checked;render()});
@@ -554,6 +778,8 @@ $("chips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(b)t
 $("loadall").addEventListener("click",loadAllYears);
 $("list").addEventListener("click",e=>{
   const tg=e.target.closest(".tag[data-tag]");if(tg){toggleTag(tg.dataset.tag);return}
+  const gz=e.target.closest(".tag[data-grp]");
+  if(gz){S.gFilter=S.gFilter===gz.dataset.grp?"":gz.dataset.grp;render();return}
   const dz=e.target.closest(".tag[data-dis]");
   if(dz){S.dFilter=S.dFilter===dz.dataset.dis?"":dz.dataset.dis;render();return}
   const tz=e.target.closest(".tag[data-tgt]");
@@ -561,8 +787,14 @@ $("list").addEventListener("click",e=>{
   const au=e.target.closest(".au");if(au){searchAuthor(au.dataset.au);return}
 });
 $("mx").addEventListener("click",e=>{
-  const b=e.target.closest("button[data-d]");if(b)drillDown(b.dataset.d,b.dataset.x);
+  const g=e.target.closest("button[data-open]");if(g){setGroup(g.dataset.open);return}
+  const b=e.target.closest("button[data-d]");if(b)drillDown(b.dataset.d,b.dataset.x,b.dataset.lvl);
 });
+$("gr-all").addEventListener("click",()=>setGroup(null));
+document.querySelectorAll(".gbtn").forEach(b=>
+  b.addEventListener("click",()=>setGroup(b.dataset.g)));
+for(const [id,k] of [["mt-orig","orig"],["mt-clin","clin"],["mt-rev","rev"]])
+  $(id).addEventListener("change",e=>{S.mxTypes[k]=e.target.checked;buildMatrix()});
 $("ax-platform").addEventListener("click",()=>{
   S.axis="platform";$("ax-platform").setAttribute("aria-pressed","true");
   $("ax-target").setAttribute("aria-pressed","false");buildMatrix();
@@ -583,9 +815,11 @@ $("list").addEventListener("toggle",async e=>{
 for(const id of ["authors","authors-first"])
   $(id).addEventListener("click",e=>{const b=e.target.closest("button[data-au]");if(b)searchAuthor(b.dataset.au)});
 $("reset").addEventListener("click",()=>{S.q="";S.year="";S.tags.clear();S.onlySum=false;
-  S.dFilter="";S.xFilter="";S.onlyConfirmed=false;S.arole="any";
+  S.dFilter="";S.xFilter="";S.gFilter="";S.onlyConfirmed=false;S.arole="any";
+  S.pt={orig:true,clin:true,rev:true};
+  $("pt-orig").checked=$("pt-clin").checked=$("pt-rev").checked=true;
   $("q").value="";$("year").value="";$("sc-sum").checked=false;
-  $("sc-confirm").checked=false;$("ar-any").checked=true;
+  $("sc-confirm").checked=false;$("ar-any").checked=true;updateHint();
   document.querySelectorAll('#chips .chip').forEach(b=>b.setAttribute("aria-pressed","false"));render()});
 $("tab-list").addEventListener("click",()=>setView("list"));
 $("tab-net").addEventListener("click",()=>setView("net"));
@@ -601,7 +835,7 @@ matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{if(S.vi
     $("m-count").textContent=S.manifest.total;
     $("m-gen").textContent=(S.manifest.generated_at||"").slice(0,10);
     for(const y of S.manifest.years.slice(0,DEFAULT_YEARS).map(x=>x.year)) await loadYear(y);
-    buildChips();buildAuthors();render();updateScopebar();
+    setMode("kw");buildChips();buildAuthors();render();updateScopebar();
   }catch(err){
     $("empty").hidden=false;
     $("empty").innerHTML="<strong>데이터를 불러오지 못했습니다</strong>data/manifest.json 을 확인하십시오.";
