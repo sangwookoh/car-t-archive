@@ -635,11 +635,26 @@ def known_pmids():
     return seen
 
 
+def fore_names(rec):
+    """Given names, positionally aligned with `authors`.
+
+    Stored separately rather than as full strings: "June CH" + "Carl H" costs
+    far less than repeating "Carl H June" alongside it, and the search joins
+    the two anyway. Empty where PubMed has initials only (~0.2% of authors).
+    """
+    out = []
+    for short, full in zip(rec.get("authors") or [], rec.get("authors_full") or []):
+        last = short.rsplit(" ", 1)[0] if " " in short else short
+        out.append(full[:-len(last)].strip() if last and full.endswith(last) else "")
+    return out
+
+
 def slim(rec):
     """Index record: everything the list view and search need except the abstract."""
     return {
         "pmid": rec["pmid"], "doi": rec["doi"], "title": rec["title"],
-        "authors": rec["authors"], "first_author": rec["first_author"],
+        "authors": rec["authors"], "fore": fore_names(rec),
+        "first_author": rec["first_author"],
         "last_author": rec["last_author"],
         "first_authors": rec.get("first_authors") or [],
         "corresponding": rec.get("corresponding") or [],
@@ -840,7 +855,7 @@ def cmd_refresh_authors(args):
     for ip in sorted(DATA.glob("idx-*.json")):
         idx = load_json(ip, {"records": []})
         for r in idx["records"]:
-            if args.force or "corr_source" not in r:
+            if args.force or "corr_source" not in r or "fore" not in r:
                 todo[r["pmid"]] = idx.get("year")
     print(f"records needing authorship: {len(todo)}")
     if not todo:
@@ -864,6 +879,7 @@ def cmd_refresh_authors(args):
                 "first_authors": rec.get("first_authors") or [],
                 "corresponding": rec.get("corresponding") or [],
                 "corr_source": rec.get("corr_source", "none"),
+                "fore": fore_names(rec),
             }
         print(f"  fetched {min(i + 200, len(pmids))}/{len(pmids)}")
         time.sleep(DELAY)
