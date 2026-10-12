@@ -155,7 +155,7 @@ footer code{font-family:var(--font-mono);font-size:11px}
       <div class="searchline">
         <div class="field">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
-          <input id="q" type="search" placeholder="제목·저자·저널·키워드·MeSH 검색  (예: CAAR, June C, pemphigus)" autocomplete="off">
+          <input id="q" type="search" placeholder="제목·저자·저널·키워드·MeSH 검색  (예: CAAR, Carl June, June CH, pemphigus)" autocomplete="off">
         </div>
         <select id="year" aria-label="연도"><option value="">불러온 연도 전체</option></select>
         <select id="sort" aria-label="정렬">
@@ -256,12 +256,25 @@ const firstsOf=r=>(r.first_authors&&r.first_authors.length)?r.first_authors
 const corrsOf =r=>(r.corresponding&&r.corresponding.length)?r.corresponding
                   :(r.last_author?[r.last_author]:[]);
 
+// "June CH" and "Carl H" are stored apart; a search for "carl june" splits into
+// terms that must all appear, so joining the two forms is enough to match it,
+// and "Carl H June" never has to be stored.
+function nameBlob(r,names){
+  const a=r.authors||[],fo=r.fore||[];
+  return names.map(n=>{const i=a.indexOf(n);return i>=0&&fo[i]?n+" "+fo[i]:n})
+              .join(" ").toLowerCase();
+}
+const fullName=(r,n)=>{const i=(r.authors||[]).indexOf(n),f=(r.fore||[])[i];
+  return f?f+" "+(n.includes(" ")?n.slice(0,n.lastIndexOf(" ")):n):n};
+
 function hay(r){
-  if(S.arole==="first")  return firstsOf(r).join(" ").toLowerCase();
-  if(S.arole==="corr")   return corrsOf(r).join(" ").toLowerCase();
-  if(S.arole==="senior") return (r.last_author||"").toLowerCase();
-  if(!r._h) r._h=[r.title,r.journal,(r.authors||[]).join(" "),(r.keywords||[]).join(" "),
-    (r.mesh||[]).join(" "),(r.category||[]).join(" "),r.pmid,r.doi].join(" ").toLowerCase();
+  if(S.arole==="first")  return nameBlob(r,firstsOf(r));
+  if(S.arole==="corr")   return nameBlob(r,corrsOf(r));
+  if(S.arole==="senior") return nameBlob(r,r.last_author?[r.last_author]:[]);
+  if(!r._h) r._h=[r.title,r.journal,(r.authors||[]).join(" "),(r.fore||[]).join(" "),
+    (r.keywords||[]).join(" "),(r.mesh||[]).join(" "),(r.category||[]).join(" "),
+    (r.disease||[]).join(" "),(r.target||[]).join(" "),r.pmid,r.doi]
+    .join(" ").toLowerCase();
   return r._h;
 }
 
@@ -306,7 +319,11 @@ function byline(r,ts){
     if(corrs.has(n)) cls.push("corr");
     const mark=(corrs.has(n)&&r.corr_source==="email")?'<sup class="rolemk" title="\uad50\uc2e0\uc800\uc790">\u2709</sup>'
               :(firsts.has(n)&&firsts.size>1)?'<sup class="rolemk" title="\uacf5\ub3d9 \uc81c1\uc800\uc790">*</sup>':'';
-    out.push('<span class="'+cls.join(" ")+'" data-au="'+esc(n)+'">'+hl(n,ts)+mark+'</span>');
+    // Given name stays out of the byline (it would double its length) but
+    // rides along in the tooltip and in the highlighted text when searched.
+    const fn=fullName(r,n);
+    out.push('<span class="'+cls.join(" ")+'" data-au="'+esc(n)+'" title="'+esc(fn)+'">'
+             +hl(n,ts)+mark+'</span>');
   });
   return out.join(", ");
 }
@@ -451,9 +468,11 @@ function drillDown(d,x){
 
 /* ---------- author index + network ---------- */
 let NET=null;
+const FULL={};   // short form -> a full name seen for it, for tooltips
 function buildAuthors(){
   const last={},first={},all={},pairs={};
   S.rows.forEach(r=>{
+    (r.authors||[]).forEach((n,i)=>{if(!FULL[n]&&(r.fore||[])[i]) FULL[n]=fullName(r,n)});
     corrsOf(r).forEach(n=>last[n]=(last[n]||0)+1);
     firstsOf(r).forEach(n=>first[n]=(first[n]||0)+1);
     const a=[...new Set(r.authors||[])];
@@ -462,7 +481,8 @@ function buildAuthors(){
       const k=[a[i],a[j]].sort().join("\u0000");pairs[k]=(pairs[k]||0)+1;}
   });
   const tbl=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,24)
-    .map(([n,c])=>'<button data-au="'+esc(n)+'"><span class="nm">'+esc(n)+'</span><span class="ct">'+c+'</span></button>').join("");
+    .map(([n,c])=>'<button data-au="'+esc(n)+'" title="'+esc(FULL[n]||n)+'">'+
+      '<span class="nm">'+esc(FULL[n]||n)+'</span><span class="ct">'+c+'</span></button>').join("");
   $("authors").innerHTML=tbl(last);
   $("authors-first").innerHTML=tbl(first);
   const top=Object.entries(all).sort((a,b)=>b[1]-a[1]).slice(0,45).map(([n,c])=>({id:n,w:c}));
