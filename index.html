@@ -194,7 +194,15 @@ table.mx td.zero{color:var(--ink-faint)}
 table.mx td.zero span{display:block;padding:7px 9px;font-family:var(--font-mono);font-size:12px;color:var(--rule)}
 table.mx tr th.rowh .tot{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-left:7px}
 .netwrap{border:1px solid var(--rule);border-radius:3px;background:var(--surface);margin-top:18px;overflow:hidden}
-#net{display:block;width:100%;height:460px;touch-action:pan-y}
+/* pan-y keeps a vertical touch drag scrolling the page past the figure;
+   zooming on touch goes through the buttons instead. */
+#net{display:block;width:100%;height:460px;touch-action:pan-y;cursor:grab}
+#net.grabbing{cursor:grabbing}
+.netwrap{position:relative}
+.netzoom{position:absolute;top:10px;right:10px;z-index:2;display:flex;flex-direction:column;gap:4px}
+.netzoom button{width:28px;height:28px;padding:0;font:500 15px/1 "IBM Plex Mono",monospace;
+  background:var(--surface);color:var(--ink-soft);border:1px solid var(--rule);border-radius:4px;cursor:pointer}
+.netzoom button:hover{background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent)}
 .netnote{font-size:12.5px;color:var(--ink-faint);padding:10px 14px;border-top:1px solid var(--rule-soft);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .authorlist{margin-top:22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft)}
 .authorlist button{appearance:none;text-align:left;font:inherit;background:var(--surface);border:0;padding:10px 13px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:baseline;color:var(--ink)}
@@ -411,8 +419,14 @@ footer code{font-family:var(--font-mono);font-size:11px}
     </div>
 
     <div class="netwrap">
+      <div class="netzoom">
+        <button id="nz-in" title="확대" aria-label="확대">+</button>
+        <button id="nz-out" title="축소" aria-label="축소">−</button>
+        <button id="nz-fit" title="처음 크기로" aria-label="처음 크기로">⤢</button>
+      </div>
       <canvas id="net"></canvas>
-      <div class="netnote"><span id="netstat">—</span><span>노드 클릭 시 해당 연구자 검색</span></div>
+      <div class="netnote"><span id="netstat">—</span>
+        <span>끌어서 이동 · 확대하면 이름이 모두 보입니다 · 노드 클릭 시 해당 연구자 검색</span></div>
     </div>
     <p class="fignote" id="netnote2"></p>
     <h3 class="secttl">교신저자 색인</h3>
@@ -436,7 +450,7 @@ const S={rows:[],abs:{},sum:{},loaded:new Set(),manifest:null,
   onlyConfirmed:false,view:"list",axis:"platform",dFilter:"",xFilter:"",gFilter:"",
   mode:"kw",pt:{orig:true,clin:true,rev:true},mxGroup:null,
   mxTypes:{orig:true,clin:true,rev:false},from:"",to:"",week:"",wk:null,
-  ndMode:"corr",ndScope:"",ndEra:"",ndFrac:false};
+  ndMode:"corr",ndScope:"",ndEra:"",ndFrac:false,ndZ:1,ndX:0,ndY:0};
 const DGROUPS=["Soft cancer","Solid cancer","I&I","Other"];
 // Which group each disease belongs to, learned from the data so the page never
 // has to keep a second copy of the taxonomy in sync with the collector.
@@ -1300,6 +1314,7 @@ function drawNet(){
     }
   }
   ctx.clearRect(0,0,W,H);
+  ctx.save();ctx.translate(S.ndX,S.ndY);ctx.scale(S.ndZ,S.ndZ);
   // Community colours come from the validated chart palette; past its length
   // the rest stay neutral rather than inventing unchecked hues.
   const pal=["--c1","--c2","--c3","--c4"].map(v=>cs.getPropertyValue(v).trim());
@@ -1317,20 +1332,39 @@ function drawNet(){
   N.forEach(n=>{const r=4+10*Math.sqrt(n.w/mx);n.r=r;
     ctx.fillStyle=colOf(n);ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);ctx.fill();
     ctx.strokeStyle=cs.getPropertyValue("--surface").trim();ctx.lineWidth=2;ctx.stroke()});
-  // Labels last so no node paints over them; only the biggest get one.
-  const lab=[...N].sort((a,b)=>b.w-a.w).slice(0,18);
-  ctx.font='500 10.5px "IBM Plex Mono",monospace';ctx.textAlign="center";
+  // Labels last so no node paints over them. At default size only the biggest
+  // get one; zooming in is how you ask for the rest, so then they all appear.
+  const lab=S.ndZ>1.35?[...N]:[...N].sort((a,b)=>b.w-a.w).slice(0,18);
+  // Counter-scale the type so labels stay legible instead of ballooning.
+  const fs=Math.max(8,Math.min(12,10.5/S.ndZ));
+  ctx.font='500 '+fs.toFixed(1)+'px "IBM Plex Mono",monospace';ctx.textAlign="center";
+  const pad=fs*0.35;
   lab.forEach(n=>{
-    const t=n.id.length>18?n.id.slice(0,17)+"…":n.id;
+    const t=n.id.length>22?n.id.slice(0,21)+"…":n.id;
     const w=ctx.measureText(t).width;
-    // Keep the whole label on canvas even when its node sits against an edge.
+    // Keep the label inside the drawing area, and drop it below the node when
+    // there is no room above — otherwise the top row gets cut off.
     const lx=Math.max(w/2+3,Math.min(W-w/2-3,n.x));
+    const up=n.y-n.r-fs-4>2, ly=up?n.y-n.r-4:n.y+n.r+fs+2;
     ctx.fillStyle=cs.getPropertyValue("--paper").trim();ctx.globalAlpha=.78;
-    ctx.fillRect(lx-w/2-2,n.y-n.r-14,w+4,12);ctx.globalAlpha=1;
-    ctx.fillStyle=cInk;ctx.fillText(t,lx,n.y-n.r-5)});
+    ctx.fillRect(lx-w/2-2,ly-fs-pad,w+4,fs+pad*2);ctx.globalAlpha=1;
+    ctx.fillStyle=cInk;ctx.fillText(t,lx,ly)});
+  ctx.restore();
 }
-function netHit(ev){const cv=$("net"),b=cv.getBoundingClientRect(),x=ev.clientX-b.left,y=ev.clientY-b.top;
-  return (NET&&NET.nodes||[]).find(n=>Math.hypot(n.x-x,n.y-y)<=(n.r||6)+5)}
+// Screen point to graph coordinates, undoing the current pan and zoom.
+function netPt(ev){const b=$("net").getBoundingClientRect();
+  return {x:((ev.clientX-b.left)-S.ndX)/S.ndZ, y:((ev.clientY-b.top)-S.ndY)/S.ndZ}}
+function netHit(ev){const p=netPt(ev);
+  return (NET&&NET.nodes||[]).find(n=>Math.hypot(n.x-p.x,n.y-p.y)<=(n.r||6)+5/S.ndZ)}
+// Zoom about a fixed screen point so the graph does not slide away under it.
+function netZoom(f,sx,sy){
+  const cv=$("net"),b=cv.getBoundingClientRect();
+  if(sx===undefined){sx=b.width/2;sy=b.height/2}
+  const z=Math.max(0.5,Math.min(6,S.ndZ*f)), k=z/S.ndZ;
+  S.ndX=sx-(sx-S.ndX)*k;S.ndY=sy-(sy-S.ndY)*k;S.ndZ=z;
+  drawNet();
+}
+function netReset(){S.ndZ=1;S.ndX=0;S.ndY=0;drawNet()}
 
 function searchAuthor(name){
   S.q=name;S.arole="any";$("q").value=name;$("ar-any").checked=true;
@@ -1488,9 +1522,46 @@ $("reset").addEventListener("click",()=>{S.q="";S.year="";S.tags.clear();S.onlyS
   document.querySelectorAll('#chips .chip').forEach(b=>b.setAttribute("aria-pressed","false"));render()});
 $("tab-list").addEventListener("click",()=>setView("list"));
 $("tab-net").addEventListener("click",openNet);
-$("net").addEventListener("click",e=>{const n=netHit(e);if(n)searchAuthor(n.id)});
+/* ---------- network: pan, zoom ---------- */
+(function(){
+  const cv=$("net");let drag=null;
+  cv.addEventListener("pointerdown",e=>{
+    if(e.button!==0&&e.pointerType==="mouse")return;
+    drag={x:e.clientX,y:e.clientY,ox:S.ndX,oy:S.ndY,moved:0,id:e.pointerId};
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove",e=>{
+    if(!drag||e.pointerId!==drag.id){
+      cv.style.cursor=netHit(e)?"pointer":"";return;}
+    const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+    drag.moved=Math.max(drag.moved,Math.hypot(dx,dy));
+    if(drag.moved>3){cv.classList.add("grabbing");S.ndX=drag.ox+dx;S.ndY=drag.oy+dy;drawNet()}
+  });
+  const end=e=>{
+    if(!drag||e.pointerId!==drag.id)return;
+    const quiet=drag.moved<=3;drag=null;cv.classList.remove("grabbing");
+    // A press that never moved is a click on a node, not a pan.
+    if(quiet){const n=netHit(e);if(n)searchAuthor(n.id)}
+  };
+  cv.addEventListener("pointerup",end);
+  cv.addEventListener("pointercancel",e=>{drag=null;cv.classList.remove("grabbing")});
+  // Ctrl/⌘ + wheel zooms, which is also what a trackpad pinch sends. A plain
+  // wheel is left to the page so scrolling past the figure still works.
+  cv.addEventListener("wheel",e=>{
+    if(!(e.ctrlKey||e.metaKey))return;
+    e.preventDefault();
+    const b=cv.getBoundingClientRect();
+    netZoom(Math.exp(-e.deltaY*0.0022),e.clientX-b.left,e.clientY-b.top);
+  },{passive:false});
+  cv.addEventListener("dblclick",e=>{
+    const b=cv.getBoundingClientRect();netZoom(1.6,e.clientX-b.left,e.clientY-b.top)});
+  $("nz-in").addEventListener("click",()=>netZoom(1.4));
+  $("nz-out").addEventListener("click",()=>netZoom(1/1.4));
+  $("nz-fit").addEventListener("click",netReset);
+})();
 function rebuildNet(){
   (NET&&NET.nodes||[]).forEach(n=>n.x=undefined);
+  S.ndZ=1;S.ndX=0;S.ndY=0;
   buildAuthors();drawNet();
 }
 async function openNet(){
@@ -1511,7 +1582,6 @@ $("nd-all").addEventListener("click",()=>{S.ndMode="all";
 $("nd-scope").addEventListener("change",e=>{S.ndScope=e.target.value;rebuildNet()});
 $("nd-era").addEventListener("change",e=>{S.ndEra=e.target.value;rebuildNet()});
 $("nd-frac").addEventListener("change",e=>{S.ndFrac=e.target.checked;rebuildNet()});
-$("net").addEventListener("mousemove",e=>{$("net").style.cursor=netHit(e)?"pointer":"default"});
 addEventListener("resize",()=>{if(S.view==="net"){(NET&&NET.nodes||[]).forEach(n=>n.x=undefined);drawNet()}});
 matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{if(S.view==="net")drawNet()});
 
