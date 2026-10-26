@@ -378,12 +378,43 @@ footer code{font-family:var(--font-mono);font-size:11px}
   </section>
 
   <section id="view-net" role="tabpanel" aria-labelledby="tab-net" hidden>
-    <h3 class="secttl">공저자 관계도</h3>
-    <p>같은 논문에 함께 등장한 저자를 연결했습니다. 원의 크기는 논문 수, 선의 굵기는 공저 횟수입니다.</p>
+    <h3 class="secttl">연구 그룹 관계도</h3>
+    <p>같은 논문에 반복해서 함께 이름을 올린 연구자를 연결해, 이 분야를 이끄는 연구 그룹의 지도를 그립니다. 선의 굵기는 공저 횟수이며, 자세한 기준은 그림 아래에 적어 두었습니다.</p>
+
+    <div class="mxbar">
+      <span>노드</span>
+      <button class="chip" id="nd-corr" aria-pressed="true">교신저자</button>
+      <button class="chip" id="nd-all" aria-pressed="false">전체 저자</button>
+      <span class="mxnote">교신저자는 랩 단위에 가깝고, 전체 저자는 인력 흐름까지 담습니다.</span>
+    </div>
+    <div class="mxbar">
+      <span>분야</span>
+      <select id="nd-scope">
+        <option value="">전체</option>
+        <option value="g:I&amp;I">면역·염증</option>
+        <option value="g:Soft cancer">혈액암</option>
+        <option value="g:Solid cancer">고형암</option>
+        <option value="c:CAAR-T">CAAR-T</option>
+        <option value="c:CAR-NK">CAR-NK</option>
+        <option value="c:CAR-M">CAR-M</option>
+        <option value="d:NMOSD">NMOSD</option>
+        <option value="d:Myasthenia gravis">중증근무력증</option>
+      </select>
+      <span>시기</span>
+      <select id="nd-era">
+        <option value="">전체</option>
+        <option value="2020">2020년 이후</option>
+        <option value="2023">2023년 이후</option>
+        <option value="-2019">2019년까지</option>
+      </select>
+      <label class="mxchk"><input type="checkbox" id="nd-frac"> 대규모 논문 가중치 분산</label>
+    </div>
+
     <div class="netwrap">
       <canvas id="net"></canvas>
-      <div class="netnote"><span id="netstat">—</span><span>노드 클릭 시 해당 저자 검색</span></div>
+      <div class="netnote"><span id="netstat">—</span><span>노드 클릭 시 해당 연구자 검색</span></div>
     </div>
+    <p class="fignote" id="netnote2"></p>
     <h3 class="secttl">교신저자 색인</h3>
     <p>교신저자가 여러 명이면 모두 집계합니다. 분야의 주요 그룹이 드러납니다.</p>
     <div class="authorlist" id="authors"></div>
@@ -404,7 +435,8 @@ const S={rows:[],abs:{},sum:{},loaded:new Set(),manifest:null,
   tags:new Set(),q:"",year:"",sort:"date",arole:"any",and:false,onlySum:false,
   onlyConfirmed:false,view:"list",axis:"platform",dFilter:"",xFilter:"",gFilter:"",
   mode:"kw",pt:{orig:true,clin:true,rev:true},mxGroup:null,
-  mxTypes:{orig:true,clin:true,rev:false},from:"",to:"",week:"",wk:null};
+  mxTypes:{orig:true,clin:true,rev:false},from:"",to:"",week:"",wk:null,
+  ndMode:"corr",ndScope:"",ndEra:"",ndFrac:false};
 const DGROUPS=["Soft cancer","Solid cancer","I&I","Other"];
 // Which group each disease belongs to, learned from the data so the page never
 // has to keep a second copy of the taxonomy in sync with the collector.
@@ -1094,31 +1126,158 @@ function setGroup(g){
   buildMatrix();
 }
 
-/* ---------- author index + network ---------- */
+/* ---------- author index + network ----------
+   Three corrections against the naive co-authorship graph:
+
+   1. Identity. "Wang Y" is 177 different people across this archive; keying a
+      node on surname+initials merges them into one giant phantom and makes the
+      graph look like it is all one lab. Nodes are keyed on the given name when
+      PubMed supplies it (99.8% of authors), so people stay separate.
+   2. Consortium papers. A paper with n authors contributes n(n-1)/2 edges, so
+      the 11% of papers with 20+ authors produce 58% of all edges — dense blobs
+      that are trial author lists, not collaborations. They are dropped from
+      edge building (their authors still count toward node size).
+   3. One-off co-authorship. An edge needs repeated collaboration to mean
+      anything, so pairs seen once are cut.                                   */
 let NET=null;
-const FULL={};   // short form -> a full name seen for it, for tooltips
+const FULL={};               // node key -> display name
+const MAX_AUTHORS=20;        // above this a paper builds no edges
+const MIN_EDGE=2;            // co-authorships needed to draw a line
+const NET_N=55;              // candidate nodes considered
+const MAX_LONE=8;            // unconnected names kept on screen
+
+// Identity key: given name + surname where known, surname+initials otherwise.
+function nodeKey(r,n){
+  const i=(r.authors||[]).indexOf(n), f=(r.fore||[])[i];
+  if(!f) return n;
+  const sp=n.lastIndexOf(" ");
+  return f+" "+(sp>0?n.slice(0,sp):n);
+}
+function netScope(r){
+  const s=S.ndScope;
+  if(s){
+    const [k,v]=[s.slice(0,1),s.slice(2)];
+    const pool=k==="g"?(r.dgroup||[]):k==="c"?(r.category||[]):(r.disease||[]);
+    if(!pool.includes(v)) return false;
+  }
+  const e=S.ndEra;
+  if(e==="-2019"){if((r.year||0)>2019) return false}
+  else if(e){if((r.year||0)<+e) return false}
+  return true;
+}
+
 function buildAuthors(){
-  const last={},first={},all={},pairs={};
+  const last={},first={},all={},lead={},pairs={};
+  // Pass 1 — author tallies over everything loaded, independent of the graph.
   S.rows.forEach(r=>{
-    (r.authors||[]).forEach((n,i)=>{if(!FULL[n]&&(r.fore||[])[i]) FULL[n]=fullName(r,n)});
-    corrsOf(r).forEach(n=>last[n]=(last[n]||0)+1);
-    firstsOf(r).forEach(n=>first[n]=(first[n]||0)+1);
-    const a=[...new Set(r.authors||[])];
-    a.forEach(n=>all[n]=(all[n]||0)+1);
+    (r.authors||[]).forEach(n=>{const k=nodeKey(r,n);if(!FULL[k])FULL[k]=k});
+    corrsOf(r).forEach(n=>{const k=nodeKey(r,n);last[k]=(last[k]||0)+1});
+    firstsOf(r).forEach(n=>{const k=nodeKey(r,n);first[k]=(first[k]||0)+1});
+  });
+  // In 교신저자 mode a node stands for a lab, so people enter the graph by how
+  // often they lead a paper, not by how often their name appears on one — which
+  // is what lets a large group's middle authors crowd out everyone else.
+  // Edges come from the full author list either way: two labs are linked when
+  // both leaders appear on one paper, whatever position each held.
+  const LEAD=S.ndMode==="corr"?new Set(Object.keys(last)):null;
+  // Pass 2 — the graph, over the chosen field and period only.
+  S.rows.forEach(r=>{
+    if(!netScope(r)) return;
+    const raw=(r.authors||[]).length;
+    let a=[...new Set((r.authors||[]).map(n=>nodeKey(r,n)))];
+    if(LEAD){
+      a=a.filter(k=>LEAD.has(k));
+      [...new Set(corrsOf(r).map(n=>nodeKey(r,n)))].forEach(k=>lead[k]=(lead[k]||0)+1);
+    }
+    a.forEach(k=>all[k]=(all[k]||0)+1);
+    // The cap looks at the paper's real author count, so a consortium paper is
+    // skipped even when only a handful of its authors are lab leaders.
+    if(a.length<2||raw>MAX_AUTHORS) return;
+    // Optional: spread one paper's edge weight so a 15-author paper cannot
+    // outweigh fifteen two-author ones.
+    const w=S.ndFrac?1/(a.length-1):1;
     for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
-      const k=[a[i],a[j]].sort().join("\u0000");pairs[k]=(pairs[k]||0)+1;}
+      const k=[a[i],a[j]].sort().join("\u0000");pairs[k]=(pairs[k]||0)+w;}
   });
   const tbl=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,24)
-    .map(([n,c])=>'<button data-au="'+esc(n)+'" title="'+esc(FULL[n]||n)+'">'+
-      '<span class="nm">'+esc(FULL[n]||n)+'</span><span class="ct">'+c+'</span></button>').join("");
+    .map(([n,c])=>'<button data-au="'+esc(n)+'" title="'+esc(n)+'">'+
+      '<span class="nm">'+esc(n)+'</span><span class="ct">'+c+'</span></button>').join("");
   $("authors").innerHTML=tbl(last);
   $("authors-first").innerHTML=tbl(first);
-  const top=Object.entries(all).sort((a,b)=>b[1]-a[1]).slice(0,45).map(([n,c])=>({id:n,w:c}));
-  const idx=new Map(top.map((d,i)=>[d.id,i])),edges=[];
-  Object.entries(pairs).forEach(([k,w])=>{const [x,y]=k.split("\u0000");
+
+  const rank=S.ndMode==="corr"?lead:all;
+  const top=Object.entries(rank).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
+    .slice(0,NET_N).map(([n,c])=>({id:n,w:c}));
+  const idx=new Map(top.map((d,i)=>[d.id,i]));
+  let edges=[];
+  const thr=S.ndFrac?MIN_EDGE/6:MIN_EDGE;
+  Object.entries(pairs).forEach(([k,w])=>{
+    if(w<thr) return;
+    const [x,y]=k.split("\u0000");
     if(idx.has(x)&&idx.has(y))edges.push({s:idx.get(x),t:idx.get(y),w});});
-  NET={nodes:top,edges};
-  $("netstat").textContent=top.length+"명 · "+edges.length+"개 공저 관계";
+  // A hairball says nothing. Keep each person's strongest few ties rather than
+  // the strongest ties overall: trimming globally strips the periphery and
+  // leaves one blob around the biggest names, which hides the structure.
+  const EDGE_K=3, full=edges.length;
+  if(full){
+    const inc=top.map(()=>[]);
+    edges.forEach((e,i)=>{inc[e.s].push(i);inc[e.t].push(i)});
+    const keep=new Set();
+    inc.forEach(list=>list.sort((a,b)=>edges[b].w-edges[a].w).slice(0,EDGE_K)
+      .forEach(i=>keep.add(i)));
+    edges=[...keep].sort((a,b)=>a-b).map(i=>edges[i]);
+  }
+  const over=edges.length<full;
+  // In a narrow field most of the top names share no repeated co-authorship, and
+  // a canvas of loose dots reads as noise. Keep everyone who is connected plus
+  // the few largest solo names, so the picture stays a map rather than a scatter.
+  const linked=new Set(edges.flatMap(e=>[e.s,e.t]));
+  const solo=top.map((n,i)=>i).filter(i=>!linked.has(i)).slice(0,MAX_LONE);
+  const vis=top.map((n,i)=>i).filter(i=>linked.has(i)||solo.includes(i));
+  const remap=new Map(vis.map((old,ni)=>[old,ni]));
+  const nodes=vis.map(i=>top[i]);
+  edges=edges.map(e=>({s:remap.get(e.s),t:remap.get(e.t),w:e.w}));
+  const hidden=top.length-nodes.length;
+  NET={nodes,edges};
+  communities(NET);
+  $("netstat").textContent=nodes.length+"명 · "+edges.length+"개 연결 · "+
+    (new Set(nodes.filter(n=>n.g>=0).map(n=>n.g)).size)+"개 그룹";
+  $("netnote2").textContent=
+    "점의 크기는 "+(S.ndMode==="corr"?"교신저자로 이끈":"저자로 참여한")+" 논문 수입니다. "+
+    "색은 함께 발표한 이력으로 이어진 연구 그룹을 뜻합니다. "+
+    "저자 "+MAX_AUTHORS+"명 이상인 논문은 연결 계산에서 제외했습니다. "+
+    "다기관 임상시험 저자 명단이 실제 협력보다 촘촘한 연결을 만들기 때문입니다. "+
+    (S.ndFrac?"가중치를 논문 규모로 나눠 적용 중입니다. ":"")+
+    (over?"한 사람당 가장 자주 함께 발표한 "+EDGE_K+"명까지만 선으로 이었습니다. "
+         :"연결선은 "+(S.ndFrac?"환산 ":"")+MIN_EDGE+"회 이상 함께 발표한 경우만 그립니다. ")+
+    (hidden?"반복 협력이 확인되지 않은 "+hidden+"명은 화면에서 생략했습니다.":
+            "상위 "+nodes.length+"명을 모두 표시했습니다.");
+}
+
+// Label propagation: cheap community detection, enough to colour clusters.
+function communities(net){
+  const adj=net.nodes.map(()=>[]);
+  net.edges.forEach(e=>{adj[e.s].push([e.t,e.w]);adj[e.t].push([e.s,e.w])});
+  net.nodes.forEach((n,i)=>n.g=i);
+  for(let pass=0;pass<12;pass++){
+    let moved=false;
+    for(let i=0;i<net.nodes.length;i++){
+      if(!adj[i].length) continue;
+      const tally={};
+      adj[i].forEach(([j,w])=>{const g=net.nodes[j].g;tally[g]=(tally[g]||0)+w});
+      let best=net.nodes[i].g,bw=-1;
+      for(const g in tally) if(tally[g]>bw){bw=tally[g];best=+g}
+      if(best!==net.nodes[i].g){net.nodes[i].g=best;moved=true}
+    }
+    if(!moved) break;
+  }
+  // Isolated nodes belong to no group; -1 keeps them out of the colour scale.
+  net.nodes.forEach((n,i)=>{if(!adj[i].length)n.g=-1});
+  // Renumber so the biggest groups get the first (most distinct) colours.
+  const size={};net.nodes.forEach(n=>{if(n.g>=0)size[n.g]=(size[n.g]||0)+1});
+  const order=Object.keys(size).sort((a,b)=>size[b]-size[a]);
+  const remap={};order.forEach((g,i)=>remap[g]=i);
+  net.nodes.forEach(n=>{if(n.g>=0)n.g=remap[n.g]??0});
 }
 function drawNet(){
   const cv=$("net");if(!NET||!NET.nodes.length||!cv.clientWidth)return;
@@ -1141,13 +1300,34 @@ function drawNet(){
     }
   }
   ctx.clearRect(0,0,W,H);
-  NET.edges.forEach(e=>{const a=N[e.s],b=N[e.t];ctx.strokeStyle=cRule;ctx.lineWidth=Math.min(e.w,4)*0.7;
+  // Community colours come from the validated chart palette; past its length
+  // the rest stay neutral rather than inventing unchecked hues.
+  const pal=["--c1","--c2","--c3","--c4"].map(v=>cs.getPropertyValue(v).trim());
+  const cFaint=cs.getPropertyValue("--ink-faint").trim();
+  const colOf=n=>(n.g>=0&&n.g<pal.length)?pal[n.g]:cFaint;
+  const mxw=Math.max(...NET.edges.map(e=>e.w),1);
+  NET.edges.forEach(e=>{const a=N[e.s],b=N[e.t];
+    ctx.strokeStyle=(a.g===b.g)?colOf(a):cRule;
+    ctx.globalAlpha=(a.g===b.g)?0.35:0.5;
+    ctx.lineWidth=0.6+2.4*Math.sqrt(e.w/mxw);
     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()});
+  ctx.globalAlpha=1;
   const mx=Math.max(...N.map(n=>n.w));
+  // A 2px surface ring keeps overlapping nodes readable.
   N.forEach(n=>{const r=4+10*Math.sqrt(n.w/mx);n.r=r;
-    ctx.fillStyle=cAcc;ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);ctx.fill();ctx.globalAlpha=1;
-    if(n.w>=Math.max(2,mx*0.33)){ctx.fillStyle=cInk;ctx.font='500 10.5px "IBM Plex Mono",monospace';
-      ctx.textAlign="center";ctx.fillText(n.id,n.x,n.y-r-4)}});
+    ctx.fillStyle=colOf(n);ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);ctx.fill();
+    ctx.strokeStyle=cs.getPropertyValue("--surface").trim();ctx.lineWidth=2;ctx.stroke()});
+  // Labels last so no node paints over them; only the biggest get one.
+  const lab=[...N].sort((a,b)=>b.w-a.w).slice(0,18);
+  ctx.font='500 10.5px "IBM Plex Mono",monospace';ctx.textAlign="center";
+  lab.forEach(n=>{
+    const t=n.id.length>18?n.id.slice(0,17)+"…":n.id;
+    const w=ctx.measureText(t).width;
+    // Keep the whole label on canvas even when its node sits against an edge.
+    const lx=Math.max(w/2+3,Math.min(W-w/2-3,n.x));
+    ctx.fillStyle=cs.getPropertyValue("--paper").trim();ctx.globalAlpha=.78;
+    ctx.fillRect(lx-w/2-2,n.y-n.r-14,w+4,12);ctx.globalAlpha=1;
+    ctx.fillStyle=cInk;ctx.fillText(t,lx,n.y-n.r-5)});
 }
 function netHit(ev){const cv=$("net"),b=cv.getBoundingClientRect(),x=ev.clientX-b.left,y=ev.clientY-b.top;
   return (NET&&NET.nodes||[]).find(n=>Math.hypot(n.x-x,n.y-y)<=(n.r||6)+5)}
@@ -1307,8 +1487,30 @@ $("reset").addEventListener("click",()=>{S.q="";S.year="";S.tags.clear();S.onlyS
   $("sc-confirm").checked=false;$("ar-any").checked=true;updateHint();
   document.querySelectorAll('#chips .chip').forEach(b=>b.setAttribute("aria-pressed","false"));render()});
 $("tab-list").addEventListener("click",()=>setView("list"));
-$("tab-net").addEventListener("click",()=>setView("net"));
+$("tab-net").addEventListener("click",openNet);
 $("net").addEventListener("click",e=>{const n=netHit(e);if(n)searchAuthor(n.id)});
+function rebuildNet(){
+  (NET&&NET.nodes||[]).forEach(n=>n.x=undefined);
+  buildAuthors();drawNet();
+}
+async function openNet(){
+  setView("net");
+  // A graph built from two years of papers is not the field's shape.
+  if(S.manifest && S.loaded.size < S.manifest.years.length){
+    $("netstat").textContent="전체 연도를 불러오는 중…";
+    await loadAllYears();
+  }
+  rebuildNet();
+}
+$("nd-corr").addEventListener("click",()=>{S.ndMode="corr";
+  $("nd-corr").setAttribute("aria-pressed","true");$("nd-all").setAttribute("aria-pressed","false");
+  rebuildNet()});
+$("nd-all").addEventListener("click",()=>{S.ndMode="all";
+  $("nd-all").setAttribute("aria-pressed","true");$("nd-corr").setAttribute("aria-pressed","false");
+  rebuildNet()});
+$("nd-scope").addEventListener("change",e=>{S.ndScope=e.target.value;rebuildNet()});
+$("nd-era").addEventListener("change",e=>{S.ndEra=e.target.value;rebuildNet()});
+$("nd-frac").addEventListener("change",e=>{S.ndFrac=e.target.checked;rebuildNet()});
 $("net").addEventListener("mousemove",e=>{$("net").style.cursor=netHit(e)?"pointer":"default"});
 addEventListener("resize",()=>{if(S.view==="net"){(NET&&NET.nodes||[]).forEach(n=>n.x=undefined);drawNet()}});
 matchMedia("(prefers-color-scheme:dark)").addEventListener("change",()=>{if(S.view==="net")drawNet()});
